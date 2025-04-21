@@ -41,6 +41,7 @@ int main() {
 	
 	if (bind(server_fd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) != 0) {
 		printf("Bind failed: %s \n", strerror(errno));
+		
 		return 1;
 	}
 	
