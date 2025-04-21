@@ -6,6 +6,12 @@
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>
+struct HttpResponse{
+	char* status;
+	char* headers;
+	char* body;
+};
+char * make_response();
 
 int main() {
 	// Disable output buffering
@@ -54,8 +60,15 @@ int main() {
 	printf("Waiting for a client to connect...\n");
 	client_addr_len = sizeof(client_addr);
 	
-	accept(server_fd, (struct sockaddr *) &client_addr, &client_addr_len);
+	int client = accept(server_fd, (struct sockaddr *) &client_addr, &client_addr_len);
 	printf("Client connected\n");
+	
+
+	char *reply = "HTTP/1.1 200 OK\r\n\r\n";
+	send(client,"HTTP/1.1 200 OK\r\n\r\n",strlen("HTTP/1.1 200 OK\r\n\r\n"),0);
+	printf("Send Response\n");
+
+
 	
 	close(server_fd);
 
