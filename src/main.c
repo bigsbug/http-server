@@ -13,14 +13,34 @@ struct HttpResponse{
 };
 
 char* make_response(char* status,char* headers,char* body){
-	int baseSize = strlen("HTTP/1.1 \r\n\r\n");
-	int statusSize = strlen(status);
-	int headerSize = strlen(headers);
-	int bodySize = strlen(body);
-	int nullTerminatorSize = 1;
-	int total_size = baseSize + statusSize + headerSize + bodySize + nullTerminatorSize;
-	char *response = malloc(total_size);
-	snprintf(response,total_size,"HTTP/1.1 %s\r\n%s\r\n%s",status,headers,body);
+	// Avoid Null inputs
+	if( !status || !headers || !body){
+		return NULL;
+	}
+	char *http_version = "HTTP/1.1";
+	char *crlf = "\r\n";
+	// we had a padding after our version
+	int http_version_len = strlen(http_version) + 1;
+	// we had two crlf on our response
+	int crlf_len = strlen(crlf)*2;
+	int status_len = strlen(status);
+	int header_len = strlen(headers);
+	int body_len = strlen(body);
+	int nullTerminator_len = 2;
+	int total_len = http_version_len + crlf_len + status_len + header_len + body_len + nullTerminator_len;
+	
+	char *response = malloc(total_len);
+	// malloc memory failed
+	if (!response){
+		return NULL;
+	};
+
+	int total_wrote = snprintf(response,total_len,"%s %s%s%s%s%s",http_version,status,crlf,headers,crlf,body);
+	// check response is overflow
+	if (total_wrote == 0 || total_wrote >= total_len){
+		return NULL;
+	};
+
 	return response;
 };
 
@@ -76,7 +96,12 @@ int main() {
 	printf("Client connected\n");
 
 	char *response = make_response("200 OK","","");
+	if (!response){
+		return 2;
+	}
+	
 	send(client,response,strlen(response),0);
+
 	printf("Send Response\n");
 
 	close(server_fd);
