@@ -75,7 +75,7 @@ int main() {
 	int client = accept(server_fd, (struct sockaddr *) &client_addr, &client_addr_len);
 	printf("Client connected\n");
 
-	char *response = make_response("201 OK","","");
+	char *response = make_response("200 OK","","");
 	send(client,response,strlen(response),0);
 	printf("Send Response\n");
 
