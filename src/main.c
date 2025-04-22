@@ -11,7 +11,19 @@ struct HttpResponse{
 	char* headers;
 	char* body;
 };
-char * make_response();
+
+char* make_response(char* status,char* headers,char* body){
+	int baseSize = strlen("HTTP/1.1 \r\n\r\n");
+	int statusSize = strlen(status);
+	int headerSize = strlen(headers);
+	int bodySize = strlen(body);
+	int nullTerminatorSize = 1;
+	int total_size = baseSize + statusSize + headerSize + bodySize + nullTerminatorSize;
+	char *response = malloc(total_size);
+	snprintf(response,total_size,"HTTP/1.1 %s\r\n%s\r\n%s",status,headers,body);
+	return response;
+};
+
 
 int main() {
 	// Disable output buffering
@@ -62,14 +74,11 @@ int main() {
 	
 	int client = accept(server_fd, (struct sockaddr *) &client_addr, &client_addr_len);
 	printf("Client connected\n");
-	
 
-	char *reply = "HTTP/1.1 200 OK\r\n\r\n";
-	send(client,"HTTP/1.1 200 OK\r\n\r\n",strlen("HTTP/1.1 200 OK\r\n\r\n"),0);
+	char *response = make_response("201 OK","","");
+	send(client,response,strlen(response),0);
 	printf("Send Response\n");
 
-
-	
 	close(server_fd);
 
 	return 0;
