@@ -228,16 +228,18 @@ int main() {
 	struct HttpRequest http_request = parse_request(request);
 
 	char *response;
-	if (http_request.method == "GET" && http_request.url == "/")
+	if (strcmp(http_request.method , "GET") == 0 && strcmp(http_request.url, "/") == 0){
 		response = make_response("200 OK","","");
 		if (!response){
 			return 2;
 		}
-	else
+	}
+	else{
 		response = make_response("404 Not Found","","");
 		if (!response){
 			return 2;
 		}
+	}
 
 
 	send(client,response,strlen(response),0);
