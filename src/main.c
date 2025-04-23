@@ -234,7 +234,7 @@ int main() {
 			return 2;
 		}
 	else
-		response = make_response("400 Not Found","","");
+		response = make_response("404 Not Found","","");
 		if (!response){
 			return 2;
 		}
