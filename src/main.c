@@ -133,37 +133,11 @@ struct HttpRequest parse_request(char *request){
 			break;
 		}
 	};
-	char *metadata[3];
-	int metadata_len = 0;
-	int request_metadata_len = strlen(request_metadata);
-	char *data = NULL;
-	last_section=0;
 
-	// spilt by space
-	for(int i=0;i<=request_metadata_len;i++){
-		data = str_slice(request_metadata,i,i+1);
-		if(strcmp(data," ")==0 || i>=request_metadata_len){
-			data = str_slice(request_metadata,last_section,i);
-			last_section = i+1; // +1 is space on string
-			metadata[metadata_len] = data;
-			metadata_len++;
-		};
-	}
-
-	if(metadata_len >= 0)
-		http_request.method = metadata[0];
-	else
-		http_request.method = "Unknown";
-
-	if(metadata_len >= 1)
-		http_request.url = metadata[1];
-	else
-		http_request.url = "/";
-
-	if(metadata_len >= 2)
-		http_request.version = metadata[2];
-	else
-		http_request.version = "Unknown";
+	char *metadata = request_metadata;
+	http_request.method = strsep(&metadata," ") ? : "Unknown";
+	http_request.url = strsep(&metadata," ") ? : "Unknown";
+	http_request.version = strsep(&metadata," ") ? : "Unknown";
 
 	return http_request;
 
