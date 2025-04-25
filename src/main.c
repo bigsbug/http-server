@@ -135,7 +135,7 @@ struct MatchedUrl match_url(char* dest_url,Url urls[],int urls_count){
 	for(int i=0;i<urls_count;i++){
 		int dest_url_tokens_count;
 		dest_url_tokens = tokenizeString(dest_url,&dest_url_tokens_count);
-		
+
 		// save corrsponding tokens that match with a '?' character
 		char **dynamic_tokens = malloc(sizeof(char *) * urls[i].tokens_count);
 		int dynamic_tokens_count = 0;
@@ -260,7 +260,7 @@ HttpResponse *dispatch_request(HttpRequest request,Url urls[],int urls_count){
 
 // VIEWS
 HttpResponse *echo(HttpRequest request){
-	char * header[1024];
+	char header[1024];
 	char *body = request.arguments[0];
 	int body_size = strlen(body);
 	snprintf(header,sizeof(header),"Content-Type: text/plain\r\nContent-Length: %d\r\n",body_size);
