@@ -259,6 +259,19 @@ HttpResponse *dispatch_request(HttpRequest request,Url urls[],int urls_count){
 }
 
 // VIEWS
+HttpResponse *index(HttpRequest request){
+	char header[1024];
+	char *body = "";
+	int body_size = strlen(body);
+	snprintf(header,sizeof(header),"Content-Type: text/plain\r\nContent-Length: %d\r\n",body_size);
+	HttpResponse *response = malloc(sizeof(HttpResponse));
+	response->status="200 OK";
+	response->headers=header;
+	response->body=request.arguments[0];
+	return response;
+};
+
+
 HttpResponse *echo(HttpRequest request){
 	char header[1024];
 	char *body = request.arguments[0];
@@ -277,8 +290,7 @@ int main() {
 	setbuf(stdout, NULL);
  	setbuf(stderr, NULL);
 	Url urls[] ={
-		*create_url("/new/done/?",echo),
-		*create_url("/echo/3",echo),
+		*create_url("/",index),
 		*create_url("/echo/?",echo),
 	};
 
