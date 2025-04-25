@@ -259,20 +259,20 @@ HttpResponse *dispatch_request(HttpRequest request,Url urls[],int urls_count){
 }
 
 // VIEWS
-HttpResponse *index(HttpRequest request){
+HttpResponse *index_view(HttpRequest request){
 	char header[1024];
-	char *body = "";
+	char *body = "index view";
 	int body_size = strlen(body);
 	snprintf(header,sizeof(header),"Content-Type: text/plain\r\nContent-Length: %d\r\n",body_size);
 	HttpResponse *response = malloc(sizeof(HttpResponse));
 	response->status="200 OK";
 	response->headers=header;
-	response->body=request.arguments[0];
+	response->body=body;
 	return response;
 };
 
 
-HttpResponse *echo(HttpRequest request){
+HttpResponse *echo_view(HttpRequest request){
 	char header[1024];
 	char *body = request.arguments[0];
 	int body_size = strlen(body);
@@ -280,7 +280,7 @@ HttpResponse *echo(HttpRequest request){
 	HttpResponse *response = malloc(sizeof(HttpResponse));
 	response->status="200 OK";
 	response->headers=header;
-	response->body=request.arguments[0];
+	response->body=body;
 	return response;
 };
 
@@ -290,8 +290,8 @@ int main() {
 	setbuf(stdout, NULL);
  	setbuf(stderr, NULL);
 	Url urls[] ={
-		*create_url("/",index),
-		*create_url("/echo/?",echo),
+		*create_url("/",index_view),
+		*create_url("/echo/?",echo_view),
 	};
 
 	int server_fd, client_addr_len;
