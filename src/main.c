@@ -8,19 +8,32 @@
 #include <unistd.h>
 #include <stdarg.h>
 
-struct HttpResponse{
-	char* status;
-	char* headers;
-	char* body;
-};
-struct HttpRequest{
+
+typedef struct{
 	char *version;
 	char *method;
 	char *url;
 	char *headers;
 	char *body;
+	char **arguments;
+	int arguments_count;
+} HttpRequest;
+typedef struct {
+	char* status;
+	char* headers;
+	char* body;
+} HttpResponse;
+typedef struct {
+	char *path;
+	char **tokens;
+	int tokens_count;
+	HttpResponse *(*view)(HttpRequest request);
+} Url;
+struct MatchedUrl {
+	int index;
+	int arguments_count;
+	char **arguments;
 };
-
 
 void printff(const char *format, ...) {
     char buffer[2048];
@@ -55,7 +68,7 @@ void printff(const char *format, ...) {
 
 char* make_response(char* status,char* headers,char* body){
 	// Avoid Null inputs
-	if( !status || !headers || !body){
+	if( !status){
 		return NULL;
 	}
 	char *http_version = "HTTP/1.1";
@@ -95,7 +108,94 @@ char *str_slice(char *str,int start,int end){
 	return buffer;
 };
 
-struct HttpRequest parse_request(char *request){
+char **tokenizeString(char *string,int *counts){
+
+	char *token;
+	*counts = 0;
+	// find total tokens to generate an array with match their size
+	char *prt = strdup(string);
+	while((token = strsep(&prt,"/")) != NULL){(*counts)++;}
+	char **tokens = malloc(sizeof(char *) * (*counts));
+	free(prt);
+	
+	// Save token as array
+	prt = strdup(string);
+	int tokens_cunt2 = 0;
+	while((token = strsep(&prt,"/")) != NULL){tokens[tokens_cunt2]=strdup(token);tokens_cunt2++;}
+	free(prt);
+	return tokens;
+}
+
+struct MatchedUrl match_url(char* dest_url,Url urls[],int urls_count){
+
+	char **dest_url_tokens;
+	int url_tokens_count;
+	struct MatchedUrl best_url = {.index=-1,.arguments=NULL,.arguments_count=0} ;
+
+	for(int i=0;i<urls_count;i++){
+		int dest_url_tokens_count;
+		dest_url_tokens = tokenizeString(dest_url,&dest_url_tokens_count);
+		
+		// save corrsponding tokens that match with a '?' character
+		char **dynamic_tokens = malloc(sizeof(char *) * urls[i].tokens_count);
+		int dynamic_tokens_count = 0;
+
+		if(dest_url_tokens_count !=  urls[i].tokens_count){
+			printf("DEBUG:#1 URL [%s] rejected\n",urls[i].path);
+			continue;
+		}
+
+		for(int t=0;t < dest_url_tokens_count;t++){
+			// printf("DEBUG:#3 URL Token [%s] %d\n",urls[i].tokens[t],dest_url_tokens_count);
+
+			if(strcmp(urls[i].tokens[t] , "?")==0){
+				best_url.index = i;
+				dynamic_tokens[dynamic_tokens_count] = strdup(dest_url_tokens[t]);
+				dynamic_tokens_count++;
+				continue;
+			}
+			if (strcmp(urls[i].tokens[t],dest_url_tokens[t]) == 0){
+				best_url.index = i;
+				continue;
+			}
+			else{
+				best_url = (struct MatchedUrl){.index=-1,.arguments=NULL,.arguments_count=0};
+				printf("DEBUG:#2 URL [%s] rejected\n",urls[i].path);
+				break;
+			}
+		}
+		// found a view that match URL
+		if(best_url.index != -1){
+			best_url.arguments = dynamic_tokens;
+			best_url.arguments_count = dynamic_tokens_count;
+			return best_url;
+		}
+		else{
+			best_url = (struct MatchedUrl){.index=-1,.arguments=NULL,.arguments_count=0};
+		}
+		free(dynamic_tokens);
+	}
+	return best_url;
+}
+
+Url *create_url(char* path,HttpResponse *(*view)(HttpRequest request)){
+	Url *url = malloc(sizeof(Url));
+	int token_counts;
+	url->path = path;
+	url->view = view;
+	url->tokens = tokenizeString(path,&token_counts);
+	url->tokens_count = token_counts;
+
+	// printf("\nTokens: ");
+	// for(int i =0;i<(token_counts);i++){
+	// 	printf("[%s] ",url->tokens[i]);
+	// }
+	// printf("\n");
+	
+	return url;
+}
+
+HttpRequest parse_request(char *request){
 	int request_len = strlen(request);
 	char *request_metadata = NULL;
 	char *request_headers = NULL;
@@ -103,7 +203,7 @@ struct HttpRequest parse_request(char *request){
 	char *crlf = "\r\n";
 	int crlf_len = strlen(crlf);
 	int last_section =0;
-	struct HttpRequest http_request = {
+	HttpRequest http_request = {
 									.version=NULL,
 									.method=NULL,
 									.url=NULL,
@@ -128,7 +228,7 @@ struct HttpRequest parse_request(char *request){
 			last_section =  i;
 			continue;
 		};
-		if(request_metadata,http_request.headers){
+		if(request_metadata && http_request.headers){
 			request_body = str_slice(request,last_section,request_len);
 			break;
 		}
@@ -144,15 +244,43 @@ struct HttpRequest parse_request(char *request){
 
 }
 
+HttpResponse *dispatch_request(HttpRequest request,Url urls[],int urls_count){
+	struct MatchedUrl matched = match_url(request.url,urls,urls_count);
+	if(matched.index == -1){
+		HttpResponse *response = malloc(sizeof(HttpResponse));
+		response->status="404 Not Found";
+		response->headers="Content-Type: text/plain\r\nContent-Length: 0\r\n";
+		response->body="";
+		return response;
+	}
+	request.arguments=matched.arguments;
+	request.arguments_count=matched.arguments_count;
+	return urls[matched.index].view(request);
+}
+
+// VIEWS
+HttpResponse *echo(HttpRequest request){
+	char * header[1024];
+	char *body = request.arguments[0];
+	int body_size = strlen(body);
+	snprintf(header,sizeof(header),"Content-Type: text/plain\r\nContent-Length: %d\r\n",body_size);
+	HttpResponse *response = malloc(sizeof(HttpResponse));
+	response->status="200 OK";
+	response->headers=header;
+	response->body=request.arguments[0];
+	return response;
+};
+
+
 int main() {
 	// Disable output buffering
 	setbuf(stdout, NULL);
  	setbuf(stderr, NULL);
-
-	// You can use print statements as follows for debugging, they'll be visible when running tests.
-	printf("Logs from your program will appear here!\n");
-
-	// Uncomment this block to pass the first stage
+	Url urls[] ={
+		*create_url("/new/done/?",echo),
+		*create_url("/echo/3",echo),
+		*create_url("/echo/?",echo),
+	};
 
 	int server_fd, client_addr_len;
 	struct sockaddr_in client_addr;
@@ -199,24 +327,17 @@ int main() {
 	int received_len = recv(client,request,request_size ,0);
 	request[received_len]= '\0';
 
-	struct HttpRequest http_request = parse_request(request);
-
+	HttpRequest http_request = parse_request(request);
+	HttpResponse *http_response =  dispatch_request(http_request,urls,3);
+	printf("Response: [%s]\n",http_response->status);
 	char *response;
-	if (strcmp(http_request.method , "GET") == 0 && strcmp(http_request.url, "/") == 0){
-		response = make_response("200 OK","","");
-		if (!response){
-			return 2;
-		}
+	response = make_response(http_response->status,http_response->headers,http_response->body);
+	if (!response){
+		return 2;
 	}
-	else{
-		response = make_response("404 Not Found","","");
-		if (!response){
-			return 2;
-		}
-	}
-
-
 	send(client,response,strlen(response),0);
+	free(response);
+
 
 	printf("Send Response\n");
 
