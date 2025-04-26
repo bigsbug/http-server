@@ -9,11 +9,16 @@
 #include <stdarg.h>
 
 
+typedef struct  {
+	char *key;
+	char *value;
+} Header;
 typedef struct{
 	char *version;
 	char *method;
 	char *url;
-	char *headers;
+	Header *headers;
+	int headers_count;
 	char *body;
 	char **arguments;
 	int arguments_count;
@@ -23,6 +28,7 @@ typedef struct {
 	char* headers;
 	char* body;
 } HttpResponse;
+
 typedef struct {
 	char *path;
 	char **tokens;
@@ -108,21 +114,49 @@ char *str_slice(char *str,int start,int end){
 	return buffer;
 };
 
-char **tokenizeString(char *string,int *counts){
-
-	char *token;
+char **tokenizeString(char *string,char *delimiter, int *counts){
 	*counts = 0;
+	int string_length = strlen(string);
+	int delimiter_length = strlen(delimiter);
+	int token_counter = 0;
+
+	// if the size of string is not enough return string inside a array as whole
+	if(string_length - delimiter_length < 0){
+		char **tokens = malloc(sizeof(char*));
+		tokens[0]= strdup(string);
+		return tokens;
+	}
+
 	// find total tokens to generate an array with match their size
-	char *prt = strdup(string);
-	while((token = strsep(&prt,"/")) != NULL){(*counts)++;}
+	for(int i=0;i<string_length - delimiter_length ;i++){
+		char *slice = str_slice(string,i,i+delimiter_length);
+		if( strcmp(slice,delimiter) == 0){
+			(*counts)++;
+		}
+		free(slice);
+	};
+
+	// extra remained string slice at end
+	(*counts)++;
+
 	char **tokens = malloc(sizeof(char *) * (*counts));
-	free(prt);
-	
+
+	int last_token_pos = 0;
 	// Save token as array
-	prt = strdup(string);
-	int tokens_cunt2 = 0;
-	while((token = strsep(&prt,"/")) != NULL){tokens[tokens_cunt2]=strdup(token);tokens_cunt2++;}
-	free(prt);
+	for(int i=0;i<string_length - delimiter_length ;i++){
+		char *slice = str_slice(string,i,i+delimiter_length);
+		if( strcmp(slice,delimiter) == 0){
+			tokens[token_counter] = str_slice(string,last_token_pos,i);
+			token_counter++;
+			last_token_pos=i+delimiter_length;
+		}
+		free(slice);
+
+		// +1 last remained string slice
+		if( *counts  == token_counter + 1){
+			tokens[token_counter] = str_slice(string,last_token_pos,string_length);
+		};
+	};
 	return tokens;
 }
 
@@ -134,7 +168,7 @@ struct MatchedUrl match_url(char* dest_url,Url urls[],int urls_count){
 
 	for(int i=0;i<urls_count;i++){
 		int dest_url_tokens_count;
-		dest_url_tokens = tokenizeString(dest_url,&dest_url_tokens_count);
+		dest_url_tokens = tokenizeString(dest_url,"/",&dest_url_tokens_count);
 
 		// save corrsponding tokens that match with a '?' character
 		char **dynamic_tokens = malloc(sizeof(char *) * urls[i].tokens_count);
@@ -183,7 +217,7 @@ Url *create_url(char* path,HttpResponse *(*view)(HttpRequest request)){
 	int token_counts;
 	url->path = path;
 	url->view = view;
-	url->tokens = tokenizeString(path,&token_counts);
+	url->tokens = tokenizeString(path,"/",&token_counts);
 	url->tokens_count = token_counts;
 
 	// printf("\nTokens: ");
@@ -199,6 +233,7 @@ HttpRequest parse_request(char *request){
 	int request_len = strlen(request);
 	char *request_metadata = NULL;
 	char *request_headers = NULL;
+	int request_headers_count = 0;
 	char *request_body = NULL;
 	char *crlf = "\r\n";
 	int crlf_len = strlen(crlf);
@@ -219,7 +254,7 @@ HttpRequest parse_request(char *request){
 			strcmp(str_slice(request,i,i+crlf_len), crlf) == 0 &&
 			strcmp(str_slice(request,i+crlf_len,i+(crlf_len*2)), crlf) == 0
 		){
-			http_request.headers = str_slice(request,last_section,i);
+			request_headers= str_slice(request,last_section,i);
 			last_section =  i;
 			continue;
 		};
@@ -238,6 +273,20 @@ HttpRequest parse_request(char *request){
 	http_request.method = strsep(&metadata," ") ? : "Unknown";
 	http_request.url = strsep(&metadata," ") ? : "Unknown";
 	http_request.version = strsep(&metadata," ") ? : "Unknown";
+	
+
+	char **headers = tokenizeString(request_headers,crlf,&request_headers_count);
+	http_request.headers = malloc(sizeof(Header)*request_headers_count );
+	for(int i=0;i<request_headers_count;i++){
+		int count=0;
+		char **header_items =  tokenizeString(headers[i],": ",&count);
+		Header header_obj = (Header){
+		header_obj.key = header_items[0],
+		header_obj.value =header_items[1],
+		};
+		http_request.headers[i] = header_obj;
+	}
+	http_request.headers_count = request_headers_count;
 
 	return http_request;
 
@@ -283,16 +332,39 @@ HttpResponse *echo_view(HttpRequest request){
 	response->body=body;
 	return response;
 };
+HttpResponse *user_agent_view(HttpRequest request){
+	char header[1024];
+	char *body ;
+	
+	for(int i=0;i<request.headers_count;i++){
+		if( strcmp("User-Agent",request.headers[i].key) == 0){
+			body = request.headers[i].value;
+			break;
+		}
+	}
+
+	int body_size = strlen(body);
+	snprintf(header,sizeof(header),"Content-Type: text/plain\r\nContent-Length: %d\r\n",body_size);
+	HttpResponse *response = malloc(sizeof(HttpResponse));
+	response->status="200 OK";
+	response->headers=header;
+	response->body=body;
+	return response;
+};
 
 
 int main() {
 	// Disable output buffering
 	setbuf(stdout, NULL);
  	setbuf(stderr, NULL);
+	int server_port = 4221;
+
 	Url urls[] ={
 		*create_url("/",index_view),
 		*create_url("/echo/?",echo_view),
+		*create_url("/user-agent",user_agent_view),
 	};
+	
 
 	int server_fd, client_addr_len;
 	struct sockaddr_in client_addr;
@@ -312,7 +384,7 @@ int main() {
 	}
 	
 	struct sockaddr_in serv_addr = { .sin_family = AF_INET ,
-									 .sin_port = htons(4221),
+									 .sin_port = htons(server_port),
 									 .sin_addr = { htonl(INADDR_ANY) },
 									};
 	
