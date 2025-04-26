@@ -120,10 +120,9 @@ char **tokenizeString(char *string,char *delimiter, int *counts){
 	int delimiter_length = strlen(delimiter);
 	int token_counter = 0;
 
-	// if the size of string is not enough return string inside a array as whole
 	if(string_length - delimiter_length < 0){
 		char **tokens = malloc(sizeof(char*));
-		tokens[0]= strdup(string);
+		tokens[0] = strdup(string);
 		return tokens;
 	}
 
@@ -143,7 +142,7 @@ char **tokenizeString(char *string,char *delimiter, int *counts){
 
 	int last_token_pos = 0;
 	// Save token as array
-	for(int i=0;i<string_length - delimiter_length ;i++){
+	for(int i=0;i<=string_length - delimiter_length ;i++){
 		char *slice = str_slice(string,i,i+delimiter_length);
 		if( strcmp(slice,delimiter) == 0){
 			tokens[token_counter] = str_slice(string,last_token_pos,i);
@@ -155,6 +154,7 @@ char **tokenizeString(char *string,char *delimiter, int *counts){
 		// +1 last remained string slice
 		if( *counts  == token_counter + 1){
 			tokens[token_counter] = str_slice(string,last_token_pos,string_length);
+			token_counter++;
 		};
 	};
 	return tokens;
@@ -174,8 +174,7 @@ struct MatchedUrl match_url(char* dest_url,Url urls[],int urls_count){
 		char **dynamic_tokens = malloc(sizeof(char *) * urls[i].tokens_count);
 		int dynamic_tokens_count = 0;
 
-		if(dest_url_tokens_count !=  urls[i].tokens_count){
-			printf("DEBUG:#1 URL [%s] rejected\n",urls[i].path);
+		if(dest_url_tokens_count != urls[i].tokens_count){
 			continue;
 		}
 
