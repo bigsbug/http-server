@@ -314,7 +314,7 @@ HttpResponse *index_view(HttpRequest request){
 	snprintf(header,sizeof(header),"Content-Type: text/plain\r\nContent-Length: %d\r\n",body_size);
 	HttpResponse *response = malloc(sizeof(HttpResponse));
 	response->status="200 OK";
-	response->headers=header;
+	response->headers=strdup(header);
 	response->body=body;
 	return response;
 };
@@ -327,7 +327,7 @@ HttpResponse *echo_view(HttpRequest request){
 	snprintf(header,sizeof(header),"Content-Type: text/plain\r\nContent-Length: %d\r\n",body_size);
 	HttpResponse *response = malloc(sizeof(HttpResponse));
 	response->status="200 OK";
-	response->headers=header;
+	response->headers=strdup(header);
 	response->body=body;
 	return response;
 };
