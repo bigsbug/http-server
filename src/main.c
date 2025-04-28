@@ -317,7 +317,7 @@ HttpResponse *dispatch_request(HttpRequest request,Url urls[],int urls_count){
 // VIEWS
 HttpResponse *index_view(HttpRequest request){
 	char header[1024];
-	char *body = "index view";
+	char *body = "";
 	int body_size = strlen(body);
 	snprintf(header,sizeof(header),"",body_size);
 	HttpResponse *response = malloc(sizeof(HttpResponse));
