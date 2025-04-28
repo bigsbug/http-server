@@ -319,7 +319,7 @@ HttpResponse *index_view(HttpRequest request){
 	char header[1024];
 	char *body = "index view";
 	int body_size = strlen(body);
-	snprintf(header,sizeof(header),"Content-Type: text/plain\r\nContent-Length: %d\r\n",body_size);
+	snprintf(header,sizeof(header),"",body_size);
 	HttpResponse *response = malloc(sizeof(HttpResponse));
 	response->status="200 OK";
 	response->headers=strdup(header);
