@@ -7,12 +7,14 @@
 #include <errno.h>
 #include <unistd.h>
 #include <stdarg.h>
+#include <pthread.h>
 
 
 typedef struct  {
 	char *key;
 	char *value;
 } Header;
+
 typedef struct{
 	char *version;
 	char *method;
@@ -23,6 +25,7 @@ typedef struct{
 	char **arguments;
 	int arguments_count;
 } HttpRequest;
+
 typedef struct {
 	char* status;
 	char* headers;
@@ -39,6 +42,11 @@ struct MatchedUrl {
 	int index;
 	int arguments_count;
 	char **arguments;
+};
+
+struct ProcessBlock {
+	int client;
+	Url *urls;
 };
 
 void printff(const char *format, ...) {
@@ -351,6 +359,29 @@ HttpResponse *user_agent_view(HttpRequest request){
 	return response;
 };
 
+void *process_request(void *arg){
+	struct ProcessBlock *pBlock = (struct ProcessBlock*)arg;
+	int client = pBlock->client;
+	Url *urls = pBlock->urls;
+
+	int request_size = 10240;
+	char *request = malloc(request_size);
+	int received_len = recv(client,request,request_size ,0);
+	request[received_len]= '\0';
+
+	HttpRequest http_request = parse_request(request);
+	HttpResponse *http_response =  dispatch_request(http_request,urls,3);
+	char *response;
+	response = make_response(http_response->status,http_response->headers,http_response->body);
+	if (!response){
+		return NULL;
+	}
+	send(client,response,strlen(response),0);
+	free(response);
+	return NULL;
+}
+
+
 
 int main() {
 	// Disable output buffering
@@ -401,28 +432,16 @@ int main() {
 	
 	printf("Waiting for a client to connect...\n");
 	client_addr_len = sizeof(client_addr);
+	while(1){
+		int client = accept(server_fd, (struct sockaddr *) &client_addr, &client_addr_len);
+		printf("Client connected\n");
+		pthread_t thread_1;
+		struct ProcessBlock pBlock = (struct ProcessBlock){client,urls};
+		pthread_create(&thread_1,NULL,process_request,&pBlock);
 	
-	int client = accept(server_fd, (struct sockaddr *) &client_addr, &client_addr_len);
-	printf("Client connected\n");
-
-	int request_size = 10240;
-	char *request = malloc(request_size);
-	int received_len = recv(client,request,request_size ,0);
-	request[received_len]= '\0';
-
-	HttpRequest http_request = parse_request(request);
-	HttpResponse *http_response =  dispatch_request(http_request,urls,3);
-	printf("Response: [%s]\n",http_response->status);
-	char *response;
-	response = make_response(http_response->status,http_response->headers,http_response->body);
-	if (!response){
-		return 2;
+		printf("Send Response\n");
+		// pthread_join(thread_1,NULL);
 	}
-	send(client,response,strlen(response),0);
-	free(response);
-
-
-	printf("Send Response\n");
 
 	close(server_fd);
 
