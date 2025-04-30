@@ -363,11 +363,14 @@ HttpResponse *user_agent_view(HttpRequest request){
 HttpResponse *files_view(HttpRequest request){
 	char header[1024];
 	char *fileName = request.arguments[0];
-	char filePath[strlen(fileName)+3];
-	snprintf(filePath,sizeof(filePath),"./%s",fileName);
-	filePath[strlen(fileName)+2] = '\0'; 
-	printf("File: [%s]",filePath);
-	FILE *file =fopen(filePath,"r");
+	char fileBasePath = "/tmp/data/codecrafters.io/http-server-tester/";
+	int fileFullPathLength = strlen(fileName)+strlen(fileBasePath);
+	char fileFullPath[fileFullPathLength + 1];
+
+	snprintf(fileFullPath,sizeof(fileFullPath),"./%s",fileName);
+	fileFullPath[fileFullPathLength] = '\0'; 
+	printf("File: [%s]",fileFullPath);
+	FILE *file =fopen(fileFullPath,"r");
 	long body_size = 0;
 	char *body = NULL;
 
