@@ -363,11 +363,12 @@ HttpResponse *user_agent_view(HttpRequest request){
 HttpResponse *files_view(HttpRequest request){
 	char header[1024];
 	char *fileName = request.arguments[0];
-	FILE *file =fopen(fileName,"r");
+	char filePath[1204];
+	snprintf(filePath,sizeof(fileName)+sizeof("./"),"./%s",fileName);
+	printf("File: [%s]",filePath);
+	FILE *file =fopen(filePath,"r");
 	long body_size = 0;
 	char *body;
-
-
 
 	if(file != NULL){
 
