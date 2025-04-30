@@ -367,7 +367,7 @@ HttpResponse *files_view(HttpRequest request){
 	snprintf(filePath,sizeof(filePath),"./%s",fileName);
 	filePath[strlen(fileName)+2] = '\0'; 
 	printf("File: [%s]",filePath);
-	FILE *file =fopen(fileName,"r");
+	FILE *file =fopen(filePath,"r");
 	long body_size = 0;
 	char *body = NULL;
 
