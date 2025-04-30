@@ -47,6 +47,7 @@ struct MatchedUrl {
 struct ProcessBlock {
 	int client;
 	Url *urls;
+	int urls_count;
 };
 
 void printff(const char *format, ...) {
@@ -359,10 +360,47 @@ HttpResponse *user_agent_view(HttpRequest request){
 	return response;
 };
 
+HttpResponse *files_view(HttpRequest request){
+	char header[1024];
+	char *fileName = request.arguments[0];
+	FILE *file =fopen(fileName,"r");
+	long body_size = 0;
+	char *body;
+
+
+
+	if(file != NULL){
+
+		// findout the file length
+		fseek(file,0,SEEK_END);
+		body_size = ftell(file);
+		fseek(file,0,SEEK_SET);
+
+		// store file content intro string
+		body = malloc(body_size + 1);
+		fgets(body,body_size,file);
+		body[body_size] = '\0';
+		fclose(file);
+
+	}
+	else{
+		body = strdup("");
+	};
+	
+
+	snprintf(header,sizeof(header),"Content-Type: application/octet-stream\r\nContent-Length: %d\r\n",body_size);
+	HttpResponse *response = malloc(sizeof(HttpResponse));
+	response->status=(file != NULL) ? "200 OK" : "404 Not Found"; 
+	response->headers=strdup(header);
+	response->body=body;
+	return response;
+};
+
 void *process_request(void *arg){
 	struct ProcessBlock *pBlock = (struct ProcessBlock*)arg;
 	int client = pBlock->client;
 	Url *urls = pBlock->urls;
+	int urls_count = pBlock->urls_count;
 
 	int request_size = 10240;
 	char *request = malloc(request_size);
@@ -370,7 +408,7 @@ void *process_request(void *arg){
 	request[received_len]= '\0';
 
 	HttpRequest http_request = parse_request(request);
-	HttpResponse *http_response =  dispatch_request(http_request,urls,3);
+	HttpResponse *http_response =  dispatch_request(http_request,urls,urls_count);
 	char *response;
 	response = make_response(http_response->status,http_response->headers,http_response->body);
 	if (!response){
@@ -378,6 +416,7 @@ void *process_request(void *arg){
 	}
 	send(client,response,strlen(response),0);
 	free(response);
+	close(client);
 	return NULL;
 }
 
@@ -393,7 +432,9 @@ int main() {
 		*create_url("/",index_view),
 		*create_url("/echo/?",echo_view),
 		*create_url("/user-agent",user_agent_view),
+		*create_url("/files/?",files_view),
 	};
+	int urls_count = 4;
 	
 
 	int server_fd, client_addr_len;
@@ -436,7 +477,7 @@ int main() {
 		int client = accept(server_fd, (struct sockaddr *) &client_addr, &client_addr_len);
 		printf("Client connected\n");
 		pthread_t thread_1;
-		struct ProcessBlock pBlock = (struct ProcessBlock){client,urls};
+		struct ProcessBlock pBlock = (struct ProcessBlock){client,urls,urls_count};
 		pthread_create(&thread_1,NULL,process_request,&pBlock);
 	
 		printf("Send Response\n");
