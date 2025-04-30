@@ -387,6 +387,7 @@ HttpResponse *files_view(HttpRequest request){
 	}
 	else{
 		body = strdup("");
+		perror("fopen failed");
 	};
 	
 
