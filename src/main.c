@@ -202,7 +202,7 @@ struct MatchedUrl match_url(char* dest_url,Url urls[],int urls_count){
 			}
 			else{
 				best_url = (struct MatchedUrl){.index=-1,.arguments=NULL,.arguments_count=0};
-				printf("DEBUG:#2 URL [%s] rejected\n",urls[i].path);
+				// printf("DEBUG:#2 URL [%s] rejected\n",urls[i].path);
 				break;
 			}
 		}
