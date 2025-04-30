@@ -363,7 +363,7 @@ HttpResponse *user_agent_view(HttpRequest request){
 HttpResponse *files_view(HttpRequest request){
 	char header[1024];
 	char *fileName = request.arguments[0];
-	char fileBasePath = "/tmp/data/codecrafters.io/http-server-tester/";
+	char *fileBasePath = "/tmp/data/codecrafters.io/http-server-tester/";
 	int fileFullPathLength = strlen(fileName)+strlen(fileBasePath);
 	char fileFullPath[fileFullPathLength + 1];
 
