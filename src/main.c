@@ -366,10 +366,10 @@ HttpResponse *files_view(HttpRequest request){
 	char filePath[strlen(fileName)+3];
 	snprintf(filePath,sizeof(filePath),"./%s",fileName);
 	filePath[strlen(fileName)+2] = '\0'; 
-	printf("File: [%s]",fileName);
+	printf("File: [%s]",filePath);
 	FILE *file =fopen(fileName,"r");
 	long body_size = 0;
-	char *body;
+	char *body = NULL;
 
 	if(file != NULL){
 
@@ -380,7 +380,7 @@ HttpResponse *files_view(HttpRequest request){
 
 		// store file content intro string
 		body = malloc(body_size + 1);
-		fgets(body,body_size,file);
+		fread(body,1,body_size,file);
 		body[body_size] = '\0';
 		fclose(file);
 
