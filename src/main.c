@@ -34,6 +34,7 @@ typedef struct {
 
 typedef struct {
 	char *path;
+	char *method;
 	char **tokens;
 	int tokens_count;
 	HttpResponse *(*view)(HttpRequest request);
@@ -169,13 +170,18 @@ char **tokenizeString(char *string,char *delimiter, int *counts){
 	return tokens;
 }
 
-struct MatchedUrl match_url(char* dest_url,Url urls[],int urls_count){
+struct MatchedUrl match_url(char* dest_url,char*request_method,Url urls[],int urls_count){
 
 	char **dest_url_tokens;
 	int url_tokens_count;
 	struct MatchedUrl best_url = {.index=-1,.arguments=NULL,.arguments_count=0} ;
-
+	printf("METHOD: %s\n",request_method);
 	for(int i=0;i<urls_count;i++){
+		if(strcmp(request_method, urls[i].method) != 0){
+			// printf("URL [%s] rejected by Rqe Method [%s] and Url Method [%s]\n",urls[i].path,request_method,urls[i].method);
+			continue;
+		}
+
 		int dest_url_tokens_count;
 		dest_url_tokens = tokenizeString(dest_url,"/",&dest_url_tokens_count);
 
@@ -220,10 +226,11 @@ struct MatchedUrl match_url(char* dest_url,Url urls[],int urls_count){
 	return best_url;
 }
 
-Url *create_url(char* path,HttpResponse *(*view)(HttpRequest request)){
+Url *create_url(char* path,char*method,HttpResponse *(*view)(HttpRequest request)){
 	Url *url = malloc(sizeof(Url));
 	int token_counts;
 	url->path = path;
+	url->method = method;
 	url->view = view;
 	url->tokens = tokenizeString(path,"/",&token_counts);
 	url->tokens_count = token_counts;
@@ -255,6 +262,12 @@ HttpRequest parse_request(char *request){
 								};
 
 	for(int i=0;i<=request_len;i++){
+		if(request_metadata && request_headers){
+			// +4 = \r\n\r\n
+			request_body = str_slice(request,last_section+4,request_len);
+			break;
+		}
+
 		// check it request length is enough to have 2 CRLF at itself as end the headers
 		if(
 			request_metadata &&
@@ -271,10 +284,7 @@ HttpRequest parse_request(char *request){
 			last_section =  i;
 			continue;
 		};
-		if(request_metadata && http_request.headers){
-			request_body = str_slice(request,last_section,request_len);
-			break;
-		}
+		
 	};
 
 	char *metadata = request_metadata;
@@ -295,6 +305,7 @@ HttpRequest parse_request(char *request){
 		http_request.headers[i] = header_obj;
 	}
 	http_request.headers_count = request_headers_count;
+	http_request.body =request_body;
 
 	return http_request;
 
@@ -302,8 +313,9 @@ HttpRequest parse_request(char *request){
 }
 
 HttpResponse *dispatch_request(HttpRequest request,Url urls[],int urls_count){
-	struct MatchedUrl matched = match_url(request.url,urls,urls_count);
+	struct MatchedUrl matched = match_url(request.url,request.method,urls,urls_count);
 	if(matched.index == -1){
+		printf("URL NOT FOUND\n");
 		HttpResponse *response = malloc(sizeof(HttpResponse));
 		response->status="404 Not Found";
 		response->headers="Content-Type: text/plain\r\nContent-Length: 0\r\n";
@@ -340,6 +352,7 @@ HttpResponse *echo_view(HttpRequest request){
 	response->body=body;
 	return response;
 };
+
 HttpResponse *user_agent_view(HttpRequest request){
 	char header[1024];
 	char *body ;
@@ -361,6 +374,8 @@ HttpResponse *user_agent_view(HttpRequest request){
 };
 
 HttpResponse *files_view(HttpRequest request){
+	printf("GET FILE\n");
+
 	char header[1024];
 	char *fileName = request.arguments[0];
 	char *fileBasePath = "/tmp/data/codecrafters.io/http-server-tester/";
@@ -402,6 +417,37 @@ HttpResponse *files_view(HttpRequest request){
 	return response;
 };
 
+HttpResponse *post_files_view(HttpRequest request){
+	char header[1024];
+	char *fileName = request.arguments[0];
+	char *fileBasePath = "/tmp/data/codecrafters.io/http-server-tester/";
+	int fileFullPathLength = strlen(fileName)+strlen(fileBasePath);
+	char fileFullPath[fileFullPathLength +1];
+	printf("Content: [%s]\n",request.body);
+	snprintf(fileFullPath,sizeof(fileFullPath),"%s%s",fileBasePath,fileName);
+	fileFullPath[fileFullPathLength] = '\0'; 
+	printf("File: [%s]",fileFullPath);
+	FILE *file =fopen(fileFullPath,"w");
+	long body_size = strlen(request.body);
+
+	if(file != NULL){
+		fwrite(file,1,body_size,request.body);
+		fclose(file);
+
+	}
+	else{
+		perror("fopen failed");
+	};
+	
+
+	snprintf(header,sizeof(header),"Content-Type: application/octet-stream\r\nContent-Length: %d\r\n",body_size);
+	HttpResponse *response = malloc(sizeof(HttpResponse));
+	response->status=(file != NULL) ? "201 Created" : "404 Not Found"; 
+	response->headers=strdup(header);
+	response->body=request.body;
+	return response;
+};
+
 void *process_request(void *arg){
 	struct ProcessBlock *pBlock = (struct ProcessBlock*)arg;
 	int client = pBlock->client;
@@ -435,12 +481,13 @@ int main() {
 	int server_port = 4221;
 
 	Url urls[] ={
-		*create_url("/",index_view),
-		*create_url("/echo/?",echo_view),
-		*create_url("/user-agent",user_agent_view),
-		*create_url("/files/?",files_view),
+		*create_url("/","GET",index_view),
+		*create_url("/echo/?","GET",echo_view),
+		*create_url("/user-agent","GET",user_agent_view),
+		*create_url("/files/?","GET",files_view),
+		*create_url("/files/?","POST",post_files_view),
 	};
-	int urls_count = 4;
+	int urls_count = 5;
 	
 
 	int server_fd, client_addr_len;
