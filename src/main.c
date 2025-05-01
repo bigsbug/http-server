@@ -420,7 +420,7 @@ HttpResponse *files_view(HttpRequest request){
 HttpResponse *post_files_view(HttpRequest request){
 	char header[1024];
 	char *fileName = request.arguments[0];
-	char *fileBasePath = "./";
+	char *fileBasePath = "/tmp/data/codecrafters.io/http-server-tester/";
 	int fileFullPathLength = strlen(fileName)+strlen(fileBasePath);
 	char fileFullPath[fileFullPathLength +1];
 	printf("Content: [%s]\n",request.body);
