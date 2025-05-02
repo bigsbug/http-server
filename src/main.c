@@ -377,7 +377,7 @@ void middleware_add_content_length(HttpResponse *response,HttpRequest *request){
 	response->headers = new_headers;
 }
 // Function to compress a string using gzip
-int compress_string(const char *input, unsigned char **output, unsigned long *output_len) {
+int compress_string(const char *input, char **output, long *output_len) {
     z_stream stream;
     int ret;
 
@@ -387,7 +387,7 @@ int compress_string(const char *input, unsigned char **output, unsigned long *ou
     stream.opaque = Z_NULL;
 
     // Initialize gzip compression (use Z_DEFAULT_COMPRESSION for default level)
-    ret = deflateInit2(&stream, Z_DEFAULT_COMPRESSION, Z_DEFLATED, 15 + 16, 8, Z_DEFAULT_STRATEGY);
+    ret = deflateInit2(&stream, Z_DEFAULT_COMPRESSION, Z_DEFLATED, MAX_WBITS + 16,MAX_MEM_LEVEL, Z_DEFAULT_STRATEGY);
     if (ret != Z_OK) {
         fprintf(stderr, "deflateInit2 failed: %d\n", ret);
         return ret;
@@ -399,7 +399,7 @@ int compress_string(const char *input, unsigned char **output, unsigned long *ou
 
     // Allocate memory for output
     *output_len = deflateBound(&stream, stream.avail_in);
-    *output = (unsigned char *)malloc(*output_len);
+    *output = (char *)malloc(*output_len);
     if (*output == NULL) {
         fprintf(stderr, "Memory allocation failed\n");
         deflateEnd(&stream);
@@ -473,13 +473,11 @@ void middleware_add_encoding(HttpResponse *response,HttpRequest *request){
 		.key=strdup("Content-Encoding"),
 		.value=strdup(accepted_encoding)
 	};
-	unsigned char *compressed_data = NULL;
-    unsigned long compressed_len;
+	char *compressed_data = NULL;
+    long compressed_len;
 
     // Compress the string
     int ret = compress_string(response->body, &compressed_data, &compressed_len);
-
-
 	response->headers_count = response->headers_count + 1;
 	response->headers = new_headers;
 	response->body = strdup(compressed_data);
@@ -648,8 +646,9 @@ void *process_request(void *arg){
 	printf("URL: %s %s\n",http_request.method,http_request.url);
 	HttpResponse *http_response =  dispatch_request(http_request,urls,urls_count);
 
-	middleware_add_content_length(http_response,NULL);
 	middleware_add_encoding(http_response,&http_request);
+	middleware_add_content_length(http_response,NULL);
+
 
 	char *response;
 	response = make_response(http_response->status,
