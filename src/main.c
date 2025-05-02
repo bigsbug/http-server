@@ -28,7 +28,8 @@ typedef struct{
 
 typedef struct {
 	char* status;
-	char* headers;
+	Header* headers;
+	int headers_count;
 	char* body;
 } HttpResponse;
 
@@ -82,13 +83,41 @@ void printff(const char *format, ...) {
     printf("\n");
 }
 
-char* make_response(char* status,char* headers,char* body){
+char *header_as_string(Header* headers,int headers_count){
+	char *crlf = "\r\n";
+	int crlf_length = 2;
+
+	char *header_start = ": ";
+	int header_start_length = 2;
+
+	int all_headers_size=0;
+
+	for(int i=0;i<headers_count;i++){
+		all_headers_size += strlen(headers[i].key) + strlen(headers[i].key) + crlf_length + header_start_length;
+	};
+
+	char buf[all_headers_size];
+	char *all_headers = malloc(sizeof(char)+ all_headers_size +1);
+	all_headers[0] = '\0'; // make it valid empty string
+
+	for(int i=0;i<headers_count;i++){
+		strlcat(all_headers,headers[i].key,sizeof(buf));
+		strlcat(all_headers,header_start,sizeof(buf));
+		strlcat(all_headers,headers[i].value,sizeof(buf));
+		strlcat(all_headers,crlf,sizeof(buf));
+	};
+
+	return all_headers;
+}
+
+char* make_response(char* status,Header* headers_obj,int headers_count,char* body){
 	// Avoid Null inputs
 	if( !status){
 		return NULL;
 	}
 	char *http_version = "HTTP/1.1";
 	char *crlf = "\r\n";
+	char* headers = header_as_string(headers_obj,headers_count);
 	// we had a padding after our version
 	int http_version_len = strlen(http_version) + 1;
 	// we had two crlf on our response
@@ -318,7 +347,9 @@ HttpResponse *dispatch_request(HttpRequest request,Url urls[],int urls_count){
 		printf("URL NOT FOUND\n");
 		HttpResponse *response = malloc(sizeof(HttpResponse));
 		response->status="404 Not Found";
-		response->headers="Content-Type: text/plain\r\nContent-Length: 0\r\n";
+		int headers_count = 1;
+		response->headers = malloc(sizeof(Header)* headers_count);
+		response->headers[0] = (Header){.key="Content-Type","text/plain"};
 		response->body="";
 		return response;
 	}
@@ -327,28 +358,58 @@ HttpResponse *dispatch_request(HttpRequest request,Url urls[],int urls_count){
 	return urls[matched.index].view(request);
 }
 
+// Middlewares
+void middleware_add_content_length(HttpResponse *response){
+	
+	Header *new_headers = malloc(sizeof(Header) *( response->headers_count + 1));
+	for(int i=0;i < response->headers_count;i++){
+		new_headers[i].key =  strdup(response->headers[i].key);
+		new_headers[i].value =  strdup(response->headers[i].value);
+	}	
+	free(response->headers);
+
+	int body_size = strlen(response->body);	
+	char content_length_header[16];
+	snprintf(content_length_header,sizeof(content_length_header),"%d",body_size);
+	new_headers[ response->headers_count] = (Header){.key=strdup("Content-Length"),.value=strdup(content_length_header)};
+
+	response->headers_count = response->headers_count + 1;
+	response->headers = new_headers;
+}
+
 // VIEWS
 HttpResponse *index_view(HttpRequest request){
 	char header[1024];
 	char *body = "";
 	int body_size = strlen(body);
-	snprintf(header,sizeof(header),"",body_size);
+
+	int headers_count = 1;
+	Header *headers = malloc(sizeof(Header)* headers_count);
+	headers[0] = (Header){.key="Content-Type","text/plain"};
+
 	HttpResponse *response = malloc(sizeof(HttpResponse));
 	response->status="200 OK";
-	response->headers=strdup(header);
+	response->headers=headers;
+	response->headers_count=headers_count;
 	response->body=body;
 	return response;
 };
 
-
 HttpResponse *echo_view(HttpRequest request){
-	char header[1024];
 	char *body = request.arguments[0];
-	int body_size = strlen(body);
-	snprintf(header,sizeof(header),"Content-Type: text/plain\r\nContent-Length: %d\r\n",body_size);
+	int body_size = strlen(body);	
+
+	char content_length_header[16];
+	snprintf(content_length_header,sizeof(content_length_header),"%d",body_size);
+	
+	int headers_count = 1;
+	Header *headers = malloc(sizeof(Header)* headers_count);
+	headers[0] = (Header){.key="Content-Type","text/plain"};
+	
 	HttpResponse *response = malloc(sizeof(HttpResponse));
 	response->status="200 OK";
-	response->headers=strdup(header);
+	response->headers=headers;
+	response->headers_count=headers_count;
 	response->body=body;
 	return response;
 };
@@ -365,11 +426,16 @@ HttpResponse *user_agent_view(HttpRequest request){
 	}
 
 	int body_size = strlen(body);
-	snprintf(header,sizeof(header),"Content-Type: text/plain\r\nContent-Length: %d\r\n",body_size);
+
 	HttpResponse *response = malloc(sizeof(HttpResponse));
+	int headers_count = 1;
+	response->headers = malloc(sizeof(Header)* headers_count);
+	response->headers[0] = (Header){.key=strdup("Content-Type"),.value=strdup("text/plain")};
+	response->headers_count=headers_count;
+
+
 	response->status="200 OK";
-	response->headers=strdup(header);
-	response->body=body;
+	response->body = body;
 	return response;
 };
 
@@ -409,10 +475,16 @@ HttpResponse *files_view(HttpRequest request){
 	};
 	
 
-	snprintf(header,sizeof(header),"Content-Type: application/octet-stream\r\nContent-Length: %d\r\n",body_size);
+	int headers_count = 1;
+	Header *headers = malloc(sizeof(Header)* headers_count);
+	headers[0] = (Header){.key="Content-Type","application/octet-stream"};
+
+	
+
 	HttpResponse *response = malloc(sizeof(HttpResponse));
 	response->status=(file != NULL) ? "200 OK" : "404 Not Found"; 
-	response->headers=strdup(header);
+	response->headers=headers;
+	response->headers_count=headers_count;
 	response->body=body;
 	return response;
 };
@@ -439,10 +511,15 @@ HttpResponse *post_files_view(HttpRequest request){
 	};
 	
 
-	snprintf(header,sizeof(header),"Content-Type: application/octet-stream\r\nContent-Length: %d\r\n",body_size);
+	int headers_count = 1;
+	Header *headers = malloc(sizeof(Header)* headers_count);
+	headers[0] = (Header){.key="Content-Type","application/octet-stream"};
+
+
 	HttpResponse *response = malloc(sizeof(HttpResponse));
 	response->status=(file != NULL) ? "201 Created" : "404 Not Found"; 
-	response->headers=strdup(header);
+	response->headers=headers;
+	response->headers_count=headers_count;
 	response->body=request.body;
 	return response;
 };
@@ -459,9 +536,16 @@ void *process_request(void *arg){
 	request[received_len]= '\0';
 
 	HttpRequest http_request = parse_request(request);
+	printf("URL: %s %s\n",http_request.method,http_request.url);
 	HttpResponse *http_response =  dispatch_request(http_request,urls,urls_count);
+
+	middleware_add_content_length(http_response);
+
 	char *response;
-	response = make_response(http_response->status,http_response->headers,http_response->body);
+	response = make_response(http_response->status,
+							http_response->headers,
+							http_response->headers_count,
+							http_response->body);
 	if (!response){
 		return NULL;
 	}
