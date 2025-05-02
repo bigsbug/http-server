@@ -394,7 +394,7 @@ int compress_string(const char *input, char **output, int *output_len) {
     }
 
     // Set input data
-    stream.avail_in = strlen(input) + 1; // Include null terminator
+    stream.avail_in = strlen(input) ;
     stream.next_in = (Bytef *)input;
 
     // Allocate memory for output
