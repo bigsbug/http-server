@@ -286,7 +286,7 @@ HttpRequest parse_request(char *request){
 								.version="",
 								.method="",
 								.url="",
-								.headers="",
+								.headers=NULL,
 								.body=""
 								};
 
