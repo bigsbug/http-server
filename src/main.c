@@ -101,10 +101,10 @@ char *header_as_string(Header* headers,int headers_count){
 	all_headers[0] = '\0'; // make it valid empty string
 
 	for(int i=0;i<headers_count;i++){
-		strlcat(all_headers,headers[i].key,sizeof(buf));
-		strlcat(all_headers,header_start,sizeof(buf));
-		strlcat(all_headers,headers[i].value,sizeof(buf));
-		strlcat(all_headers,crlf,sizeof(buf));
+		strncat(all_headers,headers[i].key,sizeof(buf));
+		strncat(all_headers,header_start,sizeof(buf));
+		strncat(all_headers,headers[i].value,sizeof(buf));
+		strncat(all_headers,crlf,sizeof(buf));
 	};
 
 	return all_headers;
