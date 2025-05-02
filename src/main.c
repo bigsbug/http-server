@@ -641,31 +641,37 @@ void *process_request(void *arg){
 	int client = pBlock->client;
 	Url *urls = pBlock->urls;
 	int urls_count = pBlock->urls_count;
+	while(1){
+		int request_size = 10240;
+		char *request = malloc(request_size);
+		int received_len = recv(client,request,request_size ,0);
+		if(received_len ==0){
+			printf("Connection Closed %d\n",client);
+			close(client);
+			return NULL;
+		}
+		request[received_len]= '\0';
+	
+		HttpRequest http_request = parse_request(request);
+		printf("URL: %s %s\n",http_request.method,http_request.url);
+		HttpResponse *http_response =  dispatch_request(http_request,urls,urls_count);
+	
+		middleware_add_encoding(http_response,&http_request);
+		middleware_add_content_length(http_response,NULL);
+	
+	
+		char *response_header = make_header_response(http_response->status,
+								http_response->headers,
+								http_response->headers_count);
+		if (!response_header){
+			return NULL;
+		}
+		send(client,response_header,strlen(response_header),0);
+		send(client,http_response->body,http_response->body_length,0);
+		free(response_header);
 
-	int request_size = 10240;
-	char *request = malloc(request_size);
-	int received_len = recv(client,request,request_size ,0);
-	request[received_len]= '\0';
-
-	HttpRequest http_request = parse_request(request);
-	printf("URL: %s %s\n",http_request.method,http_request.url);
-	HttpResponse *http_response =  dispatch_request(http_request,urls,urls_count);
-
-	middleware_add_encoding(http_response,&http_request);
-	middleware_add_content_length(http_response,NULL);
-
-
-	char *response_header = make_header_response(http_response->status,
-							http_response->headers,
-							http_response->headers_count);
-	if (!response_header){
-		return NULL;
 	}
-	send(client,response_header,strlen(response_header),0);
-	send(client,http_response->body,http_response->body_length,0);
-	free(response_header);
 
-	// close(client);
 	return NULL;
 }
 
