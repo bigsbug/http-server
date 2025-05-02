@@ -378,7 +378,7 @@ void middleware_add_content_length(HttpResponse *response,HttpRequest *request){
 }
 // Function to compress a string using gzip
 int compress_string(const char *input, char **output, long *output_len) {
-    z_stream stream;
+    z_stream stream = {0};
     int ret;
 
     // Initialize zlib stream
@@ -386,8 +386,8 @@ int compress_string(const char *input, char **output, long *output_len) {
     stream.zfree = Z_NULL;
     stream.opaque = Z_NULL;
 
-    // Initialize gzip compression (use Z_DEFAULT_COMPRESSION for default level)
-    ret = deflateInit2(&stream, Z_DEFAULT_COMPRESSION, Z_DEFLATED, MAX_WBITS + 16,MAX_MEM_LEVEL, Z_DEFAULT_STRATEGY);
+    // Initialize gzip compression (15 + 16 for gzip format)
+    ret = deflateInit2(&stream, Z_DEFAULT_COMPRESSION, Z_DEFLATED, 15 + 16, 8, Z_DEFAULT_STRATEGY);
     if (ret != Z_OK) {
         fprintf(stderr, "deflateInit2 failed: %d\n", ret);
         return ret;
