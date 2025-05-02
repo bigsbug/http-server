@@ -31,6 +31,7 @@ typedef struct {
 	Header* headers;
 	int headers_count;
 	char* body;
+	int body_length;
 } HttpResponse;
 
 typedef struct {
@@ -110,7 +111,7 @@ char *header_as_string(Header* headers,int headers_count){
 	return all_headers;
 }
 
-char* make_response(char* status,Header* headers_obj,int headers_count,char* body){
+char* make_header_response(char* status,Header* headers_obj,int headers_count){
 	// Avoid Null inputs
 	if( !status){
 		return NULL;
@@ -124,9 +125,8 @@ char* make_response(char* status,Header* headers_obj,int headers_count,char* bod
 	int crlf_len = strlen(crlf)*2;
 	int status_len = strlen(status);
 	int header_len = strlen(headers);
-	int body_len = strlen(body);
 	int nullTerminator_len = 2;
-	int total_len = http_version_len + crlf_len + status_len + header_len + body_len + nullTerminator_len;
+	int total_len = http_version_len + crlf_len + status_len + header_len  + nullTerminator_len;
 	
 	char *response = malloc(total_len);
 	// malloc memory failed
@@ -134,7 +134,7 @@ char* make_response(char* status,Header* headers_obj,int headers_count,char* bod
 		return NULL;
 	};
 
-	int total_wrote = snprintf(response,total_len,"%s %s%s%s%s%s",http_version,status,crlf,headers,crlf,body);
+	int total_wrote = snprintf(response,total_len,"%s %s%s%s%s",http_version,status,crlf,headers,crlf);
 	// check response is overflow
 	if (total_wrote == 0 || total_wrote >= total_len){
 		return NULL;
@@ -368,14 +368,14 @@ void middleware_add_content_length(HttpResponse *response,HttpRequest *request){
 	}	
 	free(response->headers);
 
-	int body_size = strlen(response->body);	
 	char content_length_header[16];
-	snprintf(content_length_header,sizeof(content_length_header),"%d",body_size);
+	snprintf(content_length_header,sizeof(content_length_header),"%d",response->body_length);
 	new_headers[ response->headers_count] = (Header){.key=strdup("Content-Length"),.value=strdup(content_length_header)};
 
 	response->headers_count = response->headers_count + 1;
 	response->headers = new_headers;
 }
+
 // Function to compress a string using gzip
 int compress_string(const char *input, char **output, long *output_len) {
     z_stream stream = {0};
@@ -466,21 +466,19 @@ void middleware_add_encoding(HttpResponse *response,HttpRequest *request){
 	}	
 	free(response->headers);
 
-	int body_size = strlen(response->body);	
-	char content_length_header[16];
-	snprintf(content_length_header,sizeof(content_length_header),"%d",body_size);
 	new_headers[ response->headers_count] = (Header){
 		.key=strdup("Content-Encoding"),
 		.value=strdup(accepted_encoding)
 	};
 	char *compressed_data = NULL;
-    long compressed_len;
 
     // Compress the string
-    int ret = compress_string(response->body, &compressed_data, &compressed_len);
+    int ret = compress_string(response->body, &compressed_data, &response->body_length);
+
 	response->headers_count = response->headers_count + 1;
 	response->headers = new_headers;
-	response->body = strdup(compressed_data);
+	response->body = compressed_data;
+
 	
 }
 
@@ -518,6 +516,7 @@ HttpResponse *echo_view(HttpRequest request){
 	response->headers=headers;
 	response->headers_count=headers_count;
 	response->body=body;
+	response->body_length=body_size;
 	return response;
 };
 
@@ -543,6 +542,8 @@ HttpResponse *user_agent_view(HttpRequest request){
 
 	response->status="200 OK";
 	response->body = body;
+	response->body_length=body_size;
+
 	return response;
 };
 
@@ -593,6 +594,8 @@ HttpResponse *files_view(HttpRequest request){
 	response->headers=headers;
 	response->headers_count=headers_count;
 	response->body=body;
+	response->body_length=body_size;
+
 	return response;
 };
 
@@ -628,6 +631,8 @@ HttpResponse *post_files_view(HttpRequest request){
 	response->headers=headers;
 	response->headers_count=headers_count;
 	response->body=request.body;
+	response->body_length=body_size;
+
 	return response;
 };
 
@@ -650,16 +655,16 @@ void *process_request(void *arg){
 	middleware_add_content_length(http_response,NULL);
 
 
-	char *response;
-	response = make_response(http_response->status,
+	char *response_header = make_header_response(http_response->status,
 							http_response->headers,
-							http_response->headers_count,
-							http_response->body);
-	if (!response){
+							http_response->headers_count);
+	if (!response_header){
 		return NULL;
 	}
-	send(client,response,strlen(response),0);
-	free(response);
+	send(client,response_header,strlen(response_header),0);
+	send(client,http_response->body,http_response->body_length,0);
+	free(response_header);
+
 	close(client);
 	return NULL;
 }
