@@ -486,7 +486,7 @@ int main() {
 		*create_url("/files/?","GET",files_view),
 		*create_url("/files/?","POST",post_files_view),
 	};
-	int urls_count = 5;
+	int urls_count = sizeof(urls) / sizeof(Url);
 	
 
 	int server_fd, client_addr_len;
