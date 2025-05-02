@@ -283,11 +283,11 @@ HttpRequest parse_request(char *request){
 	int crlf_len = strlen(crlf);
 	int last_section =0;
 	HttpRequest http_request = {
-									.version=NULL,
-									.method=NULL,
-									.url=NULL,
-									.headers=NULL,
-									.body=NULL
+								.version="",
+								.method="",
+								.url="",
+								.headers="",
+								.body=""
 								};
 
 	for(int i=0;i<=request_len;i++){
@@ -316,13 +316,13 @@ HttpRequest parse_request(char *request){
 		
 	};
 
-	char *metadata = request_metadata;
-	http_request.method = strsep(&metadata," ") ? : "Unknown";
-	http_request.url = strsep(&metadata," ") ? : "Unknown";
-	http_request.version = strsep(&metadata," ") ? : "Unknown";
-	
+	char *metadata = request_metadata ;
+	http_request.method = (metadata != NULL) ? strsep(&metadata, " ") : "Unknown";
+	http_request.url    = (metadata != NULL) ? strsep(&metadata, " ") : "Unknown";
+	http_request.version= (metadata != NULL) ? strsep(&metadata, " ") : "Unknown";
 
-	char **headers = tokenizeString(request_headers,crlf,&request_headers_count);
+
+	char **headers = tokenizeString(request_headers ?: "",crlf,&request_headers_count ?: 0);
 	http_request.headers = malloc(sizeof(Header)*request_headers_count );
 	for(int i=0;i<request_headers_count;i++){
 		int count=0;
@@ -377,55 +377,58 @@ void middleware_add_content_length(HttpResponse *response,HttpRequest *request){
 }
 
 // Function to compress a string using gzip
-int compress_string(const char *input, char **output, int *output_len) {
-    z_stream stream = {0};
-    int ret;
+// int compress_string(const char *input, char **output, int *output_len) {
+//     z_stream stream = {0};
+//     int ret;
 
-    // Initialize zlib stream
-    stream.zalloc = Z_NULL;
-    stream.zfree = Z_NULL;
-    stream.opaque = Z_NULL;
+//     // Initialize zlib stream
+//     stream.zalloc = Z_NULL;
+//     stream.zfree = Z_NULL;
+//     stream.opaque = Z_NULL;
 
-    // Initialize gzip compression (15 + 16 for gzip format)
-    ret = deflateInit2(&stream, Z_DEFAULT_COMPRESSION, Z_DEFLATED, 15 + 16, 8, Z_DEFAULT_STRATEGY);
-    if (ret != Z_OK) {
-        fprintf(stderr, "deflateInit2 failed: %d\n", ret);
-        return ret;
-    }
+//     // Initialize gzip compression (15 + 16 for gzip format)
+//     ret = deflateInit2(&stream, Z_DEFAULT_COMPRESSION, Z_DEFLATED, 15 + 16, 8, Z_DEFAULT_STRATEGY);
+//     if (ret != Z_OK) {
+//         fprintf(stderr, "deflateInit2 failed: %d\n", ret);
+//         return ret;
+//     }
 
-    // Set input data
-    stream.avail_in = strlen(input) ;
-    stream.next_in = (Bytef *)input;
+//     // Set input data
+//     stream.avail_in = strlen(input) ;
+//     stream.next_in = (Bytef *)input;
 
-    // Allocate memory for output
-    *output_len = (int)deflateBound(&stream, stream.avail_in);
-    *output = (char *)malloc(*output_len);
-    if (*output == NULL) {
-        fprintf(stderr, "Memory allocation failed\n");
-        deflateEnd(&stream);
-        return Z_MEM_ERROR;
-    }
+//     // Allocate memory for output
+//     *output_len = (int)deflateBound(&stream, stream.avail_in);
+//     *output = (char *)malloc(*output_len);
+//     if (*output == NULL) {
+//         fprintf(stderr, "Memory allocation failed\n");
+//         deflateEnd(&stream);
+//         return Z_MEM_ERROR;
+//     }
 
-    // Set output buffer
-    stream.avail_out = *output_len;
-    stream.next_out = *output;
+//     // Set output buffer
+//     stream.avail_out = *output_len;
+//     stream.next_out = *output;
 
-    // Perform compression
-    ret = deflate(&stream, Z_FINISH);
-    if (ret != Z_STREAM_END) {
-        fprintf(stderr, "deflate failed: %d\n", ret);
-        free(*output);
-        *output = NULL;
-        deflateEnd(&stream);
-        return ret;
-    }
+//     // Perform compression
+//     ret = deflate(&stream, Z_FINISH);
+//     if (ret != Z_STREAM_END) {
+//         fprintf(stderr, "deflate failed: %d\n", ret);
+//         free(*output);
+//         *output = NULL;
+//         deflateEnd(&stream);
+//         return ret;
+//     }
 
-    // Update output length
-    *output_len = (int)stream.total_out;
+//     // Update output length
+//     *output_len = (int)stream.total_out;
 
-    // Clean up
-    deflateEnd(&stream);
-    return Z_OK;
+//     // Clean up
+//     deflateEnd(&stream);
+//     return Z_OK;
+// }
+int compress_string(const char *input, char **output, int *output_len){
+	return 0;
 }
 
 void middleware_add_encoding(HttpResponse *response,HttpRequest *request){
@@ -522,7 +525,7 @@ HttpResponse *echo_view(HttpRequest request){
 
 HttpResponse *user_agent_view(HttpRequest request){
 	char header[1024];
-	char *body ;
+	char *body = "";
 	
 	for(int i=0;i<request.headers_count;i++){
 		if( strcmp("User-Agent",request.headers[i].key) == 0){
@@ -645,14 +648,38 @@ void *process_request(void *arg){
 		int request_size = 10240;
 		char *request = malloc(request_size);
 		int received_len = recv(client,request,request_size ,0);
+		request[received_len]= '\0';
+		HttpRequest http_request = parse_request(request);
+
+		for(int i=0;i<http_request.headers_count;i++){
+			if(
+				strcmp(http_request.headers[i].key,"Connection") != 0 ||
+				strcmp(http_request.headers[i].value,"close") != 0 
+			 ){continue;}
+			 HttpResponse *response = malloc(sizeof(HttpResponse));
+			 response->status="200 OK";
+			 int headers_count = 2;
+			 response->headers = malloc(sizeof(Header)* headers_count);
+			 response->headers[0] = (Header){.key="Content-Type","text/plain"};
+			 response->headers[1] = (Header){.key="Connection","close"};
+			 response->body="";
+
+			char *response_header = make_header_response(response->status,response->headers,headers_count);
+			send(client,response_header,strlen(response_header),0);
+			close(client);
+			printf("Connection Closed %d\n",client);
+
+			free(response);
+			return NULL;
+
+		};
 		if(received_len ==0){
 			printf("Connection Closed %d\n",client);
 			close(client);
 			return NULL;
 		}
-		request[received_len]= '\0';
-	
-		HttpRequest http_request = parse_request(request);
+
+		
 		printf("URL: %s %s\n",http_request.method,http_request.url);
 		HttpResponse *http_response =  dispatch_request(http_request,urls,urls_count);
 	
