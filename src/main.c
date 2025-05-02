@@ -572,7 +572,7 @@ HttpResponse *files_view(HttpRequest request){
 		// store file content intro string
 		body = malloc(body_size + 1);
 		fread(body,1,body_size,file);
-		body[body_size] = '\0';
+		// body[body_size] = '\0';
 		fclose(file);
 
 	}
