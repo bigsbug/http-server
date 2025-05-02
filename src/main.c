@@ -8,7 +8,7 @@
 #include <unistd.h>
 #include <stdarg.h>
 #include <pthread.h>
-
+#include <zlib.h>
 
 typedef struct  {
 	char *key;
@@ -376,6 +376,58 @@ void middleware_add_content_length(HttpResponse *response,HttpRequest *request){
 	response->headers_count = response->headers_count + 1;
 	response->headers = new_headers;
 }
+// Function to compress a string using gzip
+int compress_string(const char *input, unsigned char **output, unsigned long *output_len) {
+    z_stream stream;
+    int ret;
+
+    // Initialize zlib stream
+    stream.zalloc = Z_NULL;
+    stream.zfree = Z_NULL;
+    stream.opaque = Z_NULL;
+
+    // Initialize gzip compression (use Z_DEFAULT_COMPRESSION for default level)
+    ret = deflateInit2(&stream, Z_DEFAULT_COMPRESSION, Z_DEFLATED, 15 + 16, 8, Z_DEFAULT_STRATEGY);
+    if (ret != Z_OK) {
+        fprintf(stderr, "deflateInit2 failed: %d\n", ret);
+        return ret;
+    }
+
+    // Set input data
+    stream.avail_in = strlen(input) + 1; // Include null terminator
+    stream.next_in = (Bytef *)input;
+
+    // Allocate memory for output
+    *output_len = deflateBound(&stream, stream.avail_in);
+    *output = (unsigned char *)malloc(*output_len);
+    if (*output == NULL) {
+        fprintf(stderr, "Memory allocation failed\n");
+        deflateEnd(&stream);
+        return Z_MEM_ERROR;
+    }
+
+    // Set output buffer
+    stream.avail_out = *output_len;
+    stream.next_out = *output;
+
+    // Perform compression
+    ret = deflate(&stream, Z_FINISH);
+    if (ret != Z_STREAM_END) {
+        fprintf(stderr, "deflate failed: %d\n", ret);
+        free(*output);
+        *output = NULL;
+        deflateEnd(&stream);
+        return ret;
+    }
+
+    // Update output length
+    *output_len = stream.total_out;
+
+    // Clean up
+    deflateEnd(&stream);
+    return Z_OK;
+}
+
 void middleware_add_encoding(HttpResponse *response,HttpRequest *request){
 	char **encoding_types;
 	int encoding_types_count;
@@ -421,9 +473,17 @@ void middleware_add_encoding(HttpResponse *response,HttpRequest *request){
 		.key=strdup("Content-Encoding"),
 		.value=strdup(accepted_encoding)
 	};
+	unsigned char *compressed_data = NULL;
+    unsigned long compressed_len;
+
+    // Compress the string
+    int ret = compress_string(response->body, &compressed_data, &compressed_len);
+
 
 	response->headers_count = response->headers_count + 1;
 	response->headers = new_headers;
+	response->body = strdup(compressed_data);
+	
 }
 
 // VIEWS
