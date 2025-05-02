@@ -658,11 +658,11 @@ void *process_request(void *arg){
 			 ){continue;}
 			 HttpResponse *response = malloc(sizeof(HttpResponse));
 			 response->status="200 OK";
-			 int headers_count = 2;
+			 int headers_count = 3;
 			 response->headers = malloc(sizeof(Header)* headers_count);
 			 response->headers[0] = (Header){.key="Content-Type","text/plain"};
-			 response->headers[0] = (Header){.key="Content-Length","0"};
-			 response->headers[1] = (Header){.key="Connection","close"};
+			 response->headers[1] = (Header){.key="Content-Length","0"};
+			 response->headers[2] = (Header){.key="Connection","close"};
 			 response->body="";
 
 			char *response_header = make_header_response(response->status,response->headers,headers_count);
