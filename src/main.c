@@ -665,7 +665,7 @@ void *process_request(void *arg){
 	send(client,http_response->body,http_response->body_length,0);
 	free(response_header);
 
-	close(client);
+	// close(client);
 	return NULL;
 }
 
