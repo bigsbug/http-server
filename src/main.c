@@ -661,6 +661,7 @@ void *process_request(void *arg){
 			 int headers_count = 2;
 			 response->headers = malloc(sizeof(Header)* headers_count);
 			 response->headers[0] = (Header){.key="Content-Type","text/plain"};
+			 response->headers[0] = (Header){.key="Content-Length","0"};
 			 response->headers[1] = (Header){.key="Connection","close"};
 			 response->body="";
 
