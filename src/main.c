@@ -377,7 +377,7 @@ void middleware_add_content_length(HttpResponse *response,HttpRequest *request){
 }
 
 // Function to compress a string using gzip
-int compress_string(const char *input, char **output, long *output_len) {
+int compress_string(const char *input, char **output, int *output_len) {
     z_stream stream = {0};
     int ret;
 
@@ -398,7 +398,7 @@ int compress_string(const char *input, char **output, long *output_len) {
     stream.next_in = (Bytef *)input;
 
     // Allocate memory for output
-    *output_len = deflateBound(&stream, stream.avail_in);
+    *output_len = (int)deflateBound(&stream, stream.avail_in);
     *output = (char *)malloc(*output_len);
     if (*output == NULL) {
         fprintf(stderr, "Memory allocation failed\n");
@@ -421,7 +421,7 @@ int compress_string(const char *input, char **output, long *output_len) {
     }
 
     // Update output length
-    *output_len = stream.total_out;
+    *output_len = (int)stream.total_out;
 
     // Clean up
     deflateEnd(&stream);
