@@ -377,18 +377,34 @@ void middleware_add_content_length(HttpResponse *response,HttpRequest *request){
 	response->headers = new_headers;
 }
 void middleware_add_encoding(HttpResponse *response,HttpRequest *request){
-	char *encoding_types;
+	char **encoding_types;
+	int encoding_types_count;
+
+	char *supported_encoding ="gzip";
+	char *accepted_encoding = NULL;
+
 	for(int i=0;i<request->headers_count;i++){
-		if(strcmp(request->headers[i].key, "Accept-Encoding") == 0){
-			encoding_types = request->headers[i].value;
-			break;
-		}
+		if(strcmp(request->headers[i].key, "Accept-Encoding") != 0){ continue;}
+
+		encoding_types  = tokenizeString(request->headers[i].value,", ",&encoding_types_count);
+		for(int x=0;x<encoding_types_count;x++){
+			printf("ENCODING: %s\n",encoding_types[x]);
+			if(strcmp(encoding_types[x],supported_encoding) == 0){
+				accepted_encoding = strdup(encoding_types[x]);
+				break;
+			};
+		};
+
+		free(encoding_types);
+		break;
+
 	};
-	
+
 	// Encoding Not Found
-	if(encoding_types == NULL){
+	if(accepted_encoding == NULL){
 		return;
 	}
+
 
 	
 	Header *new_headers = malloc(sizeof(Header) *( response->headers_count + 1));
@@ -403,7 +419,7 @@ void middleware_add_encoding(HttpResponse *response,HttpRequest *request){
 	snprintf(content_length_header,sizeof(content_length_header),"%d",body_size);
 	new_headers[ response->headers_count] = (Header){
 		.key=strdup("Content-Encoding"),
-		.value=strdup(encoding_types)
+		.value=strdup(accepted_encoding)
 	};
 
 	response->headers_count = response->headers_count + 1;
