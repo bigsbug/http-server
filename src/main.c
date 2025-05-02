@@ -377,59 +377,57 @@ void middleware_add_content_length(HttpResponse *response,HttpRequest *request){
 }
 
 // Function to compress a string using gzip
-// int compress_string(const char *input, char **output, int *output_len) {
-//     z_stream stream = {0};
-//     int ret;
+int compress_string(const char *input, char **output, int *output_len) {
+    z_stream stream = {0};
+    int ret;
 
-//     // Initialize zlib stream
-//     stream.zalloc = Z_NULL;
-//     stream.zfree = Z_NULL;
-//     stream.opaque = Z_NULL;
+    // Initialize zlib stream
+    stream.zalloc = Z_NULL;
+    stream.zfree = Z_NULL;
+    stream.opaque = Z_NULL;
 
-//     // Initialize gzip compression (15 + 16 for gzip format)
-//     ret = deflateInit2(&stream, Z_DEFAULT_COMPRESSION, Z_DEFLATED, 15 + 16, 8, Z_DEFAULT_STRATEGY);
-//     if (ret != Z_OK) {
-//         fprintf(stderr, "deflateInit2 failed: %d\n", ret);
-//         return ret;
-//     }
+    // Initialize gzip compression (15 + 16 for gzip format)
+    ret = deflateInit2(&stream, Z_DEFAULT_COMPRESSION, Z_DEFLATED, 15 + 16, 8, Z_DEFAULT_STRATEGY);
+    if (ret != Z_OK) {
+        fprintf(stderr, "deflateInit2 failed: %d\n", ret);
+        return ret;
+    }
 
-//     // Set input data
-//     stream.avail_in = strlen(input) ;
-//     stream.next_in = (Bytef *)input;
+    // Set input data
+    stream.avail_in = strlen(input) ;
+    stream.next_in = (Bytef *)input;
 
-//     // Allocate memory for output
-//     *output_len = (int)deflateBound(&stream, stream.avail_in);
-//     *output = (char *)malloc(*output_len);
-//     if (*output == NULL) {
-//         fprintf(stderr, "Memory allocation failed\n");
-//         deflateEnd(&stream);
-//         return Z_MEM_ERROR;
-//     }
+    // Allocate memory for output
+    *output_len = (int)deflateBound(&stream, stream.avail_in);
+    *output = (char *)malloc(*output_len);
+    if (*output == NULL) {
+        fprintf(stderr, "Memory allocation failed\n");
+        deflateEnd(&stream);
+        return Z_MEM_ERROR;
+    }
 
-//     // Set output buffer
-//     stream.avail_out = *output_len;
-//     stream.next_out = *output;
+    // Set output buffer
+    stream.avail_out = *output_len;
+    stream.next_out = *output;
 
-//     // Perform compression
-//     ret = deflate(&stream, Z_FINISH);
-//     if (ret != Z_STREAM_END) {
-//         fprintf(stderr, "deflate failed: %d\n", ret);
-//         free(*output);
-//         *output = NULL;
-//         deflateEnd(&stream);
-//         return ret;
-//     }
+    // Perform compression
+    ret = deflate(&stream, Z_FINISH);
+    if (ret != Z_STREAM_END) {
+        fprintf(stderr, "deflate failed: %d\n", ret);
+        free(*output);
+        *output = NULL;
+        deflateEnd(&stream);
+        return ret;
+    }
 
-//     // Update output length
-//     *output_len = (int)stream.total_out;
+    // Update output length
+    *output_len = (int)stream.total_out;
 
-//     // Clean up
-//     deflateEnd(&stream);
-//     return Z_OK;
-// }
-int compress_string(const char *input, char **output, int *output_len){
-	return 0;
+    // Clean up
+    deflateEnd(&stream);
+    return Z_OK;
 }
+
 
 void middleware_add_encoding(HttpResponse *response,HttpRequest *request){
 	char **encoding_types;
@@ -483,6 +481,34 @@ void middleware_add_encoding(HttpResponse *response,HttpRequest *request){
 	response->body = compressed_data;
 
 	
+}
+
+
+void middleware_add_connection_status(HttpResponse *response,HttpRequest *request){
+	char **encoding_types;
+	int encoding_types_count;
+
+	char *supported_encoding ="gzip";
+	char *accepted_encoding = NULL;
+
+	for(int i=0;i<request->headers_count;i++){
+		if(strcmp(request->headers[i].key, "Connection") != 0){ continue;};
+		if(strcmp(request->headers[i].value, "close") != 0){return;}
+	};
+
+	Header *new_headers = malloc(sizeof(Header) *( response->headers_count + 1));
+	for(int i=0;i < response->headers_count;i++){
+		new_headers[i].key =  strdup(response->headers[i].key);
+		new_headers[i].value =  strdup(response->headers[i].value);
+	}	
+	free(response->headers);
+
+	new_headers[ response->headers_count] = (Header){
+		.key=strdup("Connection"),
+		.value=strdup("close")
+	};
+	response->headers_count = response->headers_count + 1;
+	response->headers = new_headers;
 }
 
 // VIEWS
@@ -651,29 +677,6 @@ void *process_request(void *arg){
 		request[received_len]= '\0';
 		HttpRequest http_request = parse_request(request);
 
-		for(int i=0;i<http_request.headers_count;i++){
-			if(
-				strcmp(http_request.headers[i].key,"Connection") != 0 ||
-				strcmp(http_request.headers[i].value,"close") != 0 
-			 ){continue;}
-			 HttpResponse *response = malloc(sizeof(HttpResponse));
-			 response->status="200 OK";
-			 int headers_count = 3;
-			 response->headers = malloc(sizeof(Header)* headers_count);
-			 response->headers[0] = (Header){.key="Content-Type","text/plain"};
-			 response->headers[1] = (Header){.key="Content-Length","0"};
-			 response->headers[2] = (Header){.key="Connection","close"};
-			 response->body="";
-
-			char *response_header = make_header_response(response->status,response->headers,headers_count);
-			send(client,response_header,strlen(response_header),0);
-			close(client);
-			printf("Connection Closed %d\n",client);
-
-			free(response);
-			return NULL;
-
-		};
 		if(received_len ==0){
 			printf("Connection Closed %d\n",client);
 			close(client);
@@ -686,8 +689,8 @@ void *process_request(void *arg){
 	
 		middleware_add_encoding(http_response,&http_request);
 		middleware_add_content_length(http_response,NULL);
-	
-	
+		middleware_add_connection_status(http_response,&http_request);
+		
 		char *response_header = make_header_response(http_response->status,
 								http_response->headers,
 								http_response->headers_count);
@@ -697,6 +700,17 @@ void *process_request(void *arg){
 		send(client,response_header,strlen(response_header),0);
 		send(client,http_response->body,http_response->body_length,0);
 		free(response_header);
+
+		for(int i=0;i<http_response->headers;i++){
+			if(
+				strcmp(http_response->headers[i].key,"Connection") != 0 ||
+				strcmp(http_response->headers[i].value,"close") != 0 
+			 ){continue;}
+			close(client);
+			printf("Connection Closed %d\n",client);
+			return NULL;
+
+		};
 
 	}
 
