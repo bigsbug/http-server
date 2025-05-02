@@ -359,7 +359,7 @@ HttpResponse *dispatch_request(HttpRequest request,Url urls[],int urls_count){
 }
 
 // Middlewares
-void middleware_add_content_length(HttpResponse *response){
+void middleware_add_content_length(HttpResponse *response,HttpRequest *request){
 	
 	Header *new_headers = malloc(sizeof(Header) *( response->headers_count + 1));
 	for(int i=0;i < response->headers_count;i++){
@@ -372,6 +372,39 @@ void middleware_add_content_length(HttpResponse *response){
 	char content_length_header[16];
 	snprintf(content_length_header,sizeof(content_length_header),"%d",body_size);
 	new_headers[ response->headers_count] = (Header){.key=strdup("Content-Length"),.value=strdup(content_length_header)};
+
+	response->headers_count = response->headers_count + 1;
+	response->headers = new_headers;
+}
+void middleware_add_encoding(HttpResponse *response,HttpRequest *request){
+	char *encoding_types;
+	for(int i=0;i<request->headers_count;i++){
+		if(strcmp(request->headers[i].key, "Accept-Encoding") == 0){
+			encoding_types = request->headers[i].value;
+			break;
+		}
+	};
+	
+	// Encoding Not Found
+	if(encoding_types == NULL){
+		return;
+	}
+
+	
+	Header *new_headers = malloc(sizeof(Header) *( response->headers_count + 1));
+	for(int i=0;i < response->headers_count;i++){
+		new_headers[i].key =  strdup(response->headers[i].key);
+		new_headers[i].value =  strdup(response->headers[i].value);
+	}	
+	free(response->headers);
+
+	int body_size = strlen(response->body);	
+	char content_length_header[16];
+	snprintf(content_length_header,sizeof(content_length_header),"%d",body_size);
+	new_headers[ response->headers_count] = (Header){
+		.key=strdup("Content-Encoding"),
+		.value=strdup(encoding_types)
+	};
 
 	response->headers_count = response->headers_count + 1;
 	response->headers = new_headers;
@@ -539,7 +572,8 @@ void *process_request(void *arg){
 	printf("URL: %s %s\n",http_request.method,http_request.url);
 	HttpResponse *http_response =  dispatch_request(http_request,urls,urls_count);
 
-	middleware_add_content_length(http_response);
+	middleware_add_content_length(http_response,NULL);
+	middleware_add_encoding(http_response,&http_request);
 
 	char *response;
 	response = make_response(http_response->status,
