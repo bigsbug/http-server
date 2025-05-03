@@ -97,17 +97,17 @@ void middleware_add_connection_status(HttpResponse *response,HttpRequest *reques
 	printf(" NOT REJECT CLOSE CONNECTION\n");
 
 
-	// Header *new_headers = malloc(sizeof(Header) *( response->headers_count + 1));
-	// for(int i=0;i < response->headers_count;i++){
-	// 	new_headers[i].key =  strdup(response->headers[i].key);
-	// 	new_headers[i].value =  strdup(response->headers[i].value);
-	// }	
-	// free(response->headers);
+	Header *new_headers = malloc(sizeof(Header) *( response->headers_count + 1));
+	for(int i=0;i < response->headers_count;i++){
+		new_headers[i].key =  strdup(response->headers[i].key);
+		new_headers[i].value =  strdup(response->headers[i].value);
+	}	
+	free(response->headers);
 
-	// new_headers[ response->headers_count] = (Header){
-	// 	.key=strdup("Connection"),
-	// 	.value=strdup("close")
-	// };
-	// response->headers_count = response->headers_count + 1;
-	// response->headers = new_headers;
+	new_headers[ response->headers_count] = (Header){
+		.key=strdup("Connection"),
+		.value=strdup("close")
+	};
+	response->headers_count = response->headers_count + 1;
+	response->headers = new_headers;
 }
