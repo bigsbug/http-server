@@ -1,0 +1,16 @@
+{
+    "files.associations": {
+        "complex": "c",
+        "zlib.h": "c",
+        "__bit_reference": "c",
+        "__node_handle": "c",
+        "bitset": "c",
+        "deque": "c",
+        "limits": "c",
+        "locale": "c",
+        "optional": "c",
+        "ratio": "c",
+        "vector": "c",
+        "middlewares.h": "c"
+    }
+}
