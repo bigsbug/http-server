@@ -8,39 +8,11 @@
 #include <unistd.h>
 #include <stdarg.h>
 #include <pthread.h>
-#include <zlib.h>
 
-typedef struct  {
-	char *key;
-	char *value;
-} Header;
+#include "http.h"
+#include "views.h"
+#include "utils.h"
 
-typedef struct{
-	char *version;
-	char *method;
-	char *url;
-	Header *headers;
-	int headers_count;
-	char *body;
-	char **arguments;
-	int arguments_count;
-} HttpRequest;
-
-typedef struct {
-	char* status;
-	Header* headers;
-	int headers_count;
-	char* body;
-	int body_length;
-} HttpResponse;
-
-typedef struct {
-	char *path;
-	char *method;
-	char **tokens;
-	int tokens_count;
-	HttpResponse *(*view)(HttpRequest request);
-} Url;
 struct MatchedUrl {
 	int index;
 	int arguments_count;
@@ -376,59 +348,6 @@ void middleware_add_content_length(HttpResponse *response,HttpRequest *request){
 	response->headers = new_headers;
 }
 
-// Function to compress a string using gzip
-int compress_string(const char *input, char **output, int *output_len) {
-    z_stream stream = {0};
-    int ret;
-
-    // Initialize zlib stream
-    stream.zalloc = Z_NULL;
-    stream.zfree = Z_NULL;
-    stream.opaque = Z_NULL;
-
-    // Initialize gzip compression (15 + 16 for gzip format)
-    ret = deflateInit2(&stream, Z_DEFAULT_COMPRESSION, Z_DEFLATED, 15 + 16, 8, Z_DEFAULT_STRATEGY);
-    if (ret != Z_OK) {
-        fprintf(stderr, "deflateInit2 failed: %d\n", ret);
-        return ret;
-    }
-
-    // Set input data
-    stream.avail_in = strlen(input) ;
-    stream.next_in = (Bytef *)input;
-
-    // Allocate memory for output
-    *output_len = (int)deflateBound(&stream, stream.avail_in);
-    *output = (char *)malloc(*output_len);
-    if (*output == NULL) {
-        fprintf(stderr, "Memory allocation failed\n");
-        deflateEnd(&stream);
-        return Z_MEM_ERROR;
-    }
-
-    // Set output buffer
-    stream.avail_out = *output_len;
-    stream.next_out = *output;
-
-    // Perform compression
-    ret = deflate(&stream, Z_FINISH);
-    if (ret != Z_STREAM_END) {
-        fprintf(stderr, "deflate failed: %d\n", ret);
-        free(*output);
-        *output = NULL;
-        deflateEnd(&stream);
-        return ret;
-    }
-
-    // Update output length
-    *output_len = (int)stream.total_out;
-
-    // Clean up
-    deflateEnd(&stream);
-    return Z_OK;
-}
-
-
 void middleware_add_encoding(HttpResponse *response,HttpRequest *request){
 	char **encoding_types;
 	int encoding_types_count;
@@ -483,187 +402,39 @@ void middleware_add_encoding(HttpResponse *response,HttpRequest *request){
 	
 }
 
-
 void middleware_add_connection_status(HttpResponse *response,HttpRequest *request){
-	char **encoding_types;
-	int encoding_types_count;
-
-	char *supported_encoding ="gzip";
-	char *accepted_encoding = NULL;
-
+	int has_connectin_header = 0;
 	for(int i=0;i<request->headers_count;i++){
-		if(strcmp(request->headers[i].key, "Connection") != 0){ continue;};
-		if(strcmp(request->headers[i].value, "close") != 0){return;}
-	};
-
-	Header *new_headers = malloc(sizeof(Header) *( response->headers_count + 1));
-	for(int i=0;i < response->headers_count;i++){
-		new_headers[i].key =  strdup(response->headers[i].key);
-		new_headers[i].value =  strdup(response->headers[i].value);
-	}	
-	free(response->headers);
-
-	new_headers[ response->headers_count] = (Header){
-		.key=strdup("Connection"),
-		.value=strdup("close")
-	};
-	response->headers_count = response->headers_count + 1;
-	response->headers = new_headers;
-}
-
-// VIEWS
-HttpResponse *index_view(HttpRequest request){
-	char header[1024];
-	char *body = "";
-	int body_size = strlen(body);
-
-	int headers_count = 1;
-	Header *headers = malloc(sizeof(Header)* headers_count);
-	headers[0] = (Header){.key="Content-Type","text/plain"};
-
-	HttpResponse *response = malloc(sizeof(HttpResponse));
-	response->status="200 OK";
-	response->headers=headers;
-	response->headers_count=headers_count;
-	response->body=body;
-	return response;
-};
-
-HttpResponse *echo_view(HttpRequest request){
-	char *body = request.arguments[0];
-	int body_size = strlen(body);	
-
-	char content_length_header[16];
-	snprintf(content_length_header,sizeof(content_length_header),"%d",body_size);
-	
-	int headers_count = 1;
-	Header *headers = malloc(sizeof(Header)* headers_count);
-	headers[0] = (Header){.key="Content-Type","text/plain"};
-	
-	HttpResponse *response = malloc(sizeof(HttpResponse));
-	response->status="200 OK";
-	response->headers=headers;
-	response->headers_count=headers_count;
-	response->body=body;
-	response->body_length=body_size;
-	return response;
-};
-
-HttpResponse *user_agent_view(HttpRequest request){
-	char header[1024];
-	char *body = "";
-	
-	for(int i=0;i<request.headers_count;i++){
-		if( strcmp("User-Agent",request.headers[i].key) == 0){
-			body = request.headers[i].value;
+		if(strcmp(request->headers[i].key, "Connection") == 0)
+		{
+			if(strcmp(request->headers[i].value, "close") == 0){
+				has_connectin_header = 1;		
+			}
 			break;
+
 		}
-	}
-
-	int body_size = strlen(body);
-
-	HttpResponse *response = malloc(sizeof(HttpResponse));
-	int headers_count = 1;
-	response->headers = malloc(sizeof(Header)* headers_count);
-	response->headers[0] = (Header){.key=strdup("Content-Type"),.value=strdup("text/plain")};
-	response->headers_count=headers_count;
-
-
-	response->status="200 OK";
-	response->body = body;
-	response->body_length=body_size;
-
-	return response;
-};
-
-HttpResponse *files_view(HttpRequest request){
-	printf("GET FILE\n");
-
-	char header[1024];
-	char *fileName = request.arguments[0];
-	char *fileBasePath = "/tmp/data/codecrafters.io/http-server-tester/";
-	int fileFullPathLength = strlen(fileName)+strlen(fileBasePath);
-	char fileFullPath[fileFullPathLength +1];
-
-	snprintf(fileFullPath,sizeof(fileFullPath),"%s%s",fileBasePath,fileName);
-	fileFullPath[fileFullPathLength] = '\0'; 
-	printf("File: [%s]",fileFullPath);
-	FILE *file =fopen(fileFullPath,"r");
-	long body_size = 0;
-	char *body = NULL;
-
-	if(file != NULL){
-
-		// findout the file length
-		fseek(file,0,SEEK_END);
-		body_size = ftell(file);
-		fseek(file,0,SEEK_SET);
-
-		// store file content intro string
-		body = malloc(body_size + 1);
-		fread(body,1,body_size,file);
-		// body[body_size] = '\0';
-		fclose(file);
-
-	}
-	else{
-		body = strdup("");
-		perror("fopen failed");
 	};
-	
-
-	int headers_count = 1;
-	Header *headers = malloc(sizeof(Header)* headers_count);
-	headers[0] = (Header){.key="Content-Type","application/octet-stream"};
-
-	
-
-	HttpResponse *response = malloc(sizeof(HttpResponse));
-	response->status=(file != NULL) ? "200 OK" : "404 Not Found"; 
-	response->headers=headers;
-	response->headers_count=headers_count;
-	response->body=body;
-	response->body_length=body_size;
-
-	return response;
-};
-
-HttpResponse *post_files_view(HttpRequest request){
-	char header[1024];
-	char *fileName = request.arguments[0];
-	char *fileBasePath = "/tmp/data/codecrafters.io/http-server-tester/";
-	int fileFullPathLength = strlen(fileName)+strlen(fileBasePath);
-	char fileFullPath[fileFullPathLength +1];
-	printf("Content: [%s]\n",request.body);
-	snprintf(fileFullPath,sizeof(fileFullPath),"%s%s",fileBasePath,fileName);
-	fileFullPath[fileFullPathLength] = '\0'; 
-	printf("File: [%s]",fileFullPath);
-	FILE *file =fopen(fileFullPath,"w");
-	long body_size = strlen(request.body);
-
-	if(file != NULL){
-		fwrite(request.body,1,body_size,file);
-		fclose(file);
+	if(has_connectin_header ==0 ){
+		printf("REJECT CLOSE CONNECTION\n");
+		return;
 	}
-	else{
-		perror("fopen failed");
-	};
-	
-
-	int headers_count = 1;
-	Header *headers = malloc(sizeof(Header)* headers_count);
-	headers[0] = (Header){.key="Content-Type","application/octet-stream"};
+	printf(" NOT REJECT CLOSE CONNECTION\n");
 
 
-	HttpResponse *response = malloc(sizeof(HttpResponse));
-	response->status=(file != NULL) ? "201 Created" : "404 Not Found"; 
-	response->headers=headers;
-	response->headers_count=headers_count;
-	response->body=request.body;
-	response->body_length=body_size;
+	// Header *new_headers = malloc(sizeof(Header) *( response->headers_count + 1));
+	// for(int i=0;i < response->headers_count;i++){
+	// 	new_headers[i].key =  strdup(response->headers[i].key);
+	// 	new_headers[i].value =  strdup(response->headers[i].value);
+	// }	
+	// free(response->headers);
 
-	return response;
-};
+	// new_headers[ response->headers_count] = (Header){
+	// 	.key=strdup("Connection"),
+	// 	.value=strdup("close")
+	// };
+	// response->headers_count = response->headers_count + 1;
+	// response->headers = new_headers;
+}
 
 void *process_request(void *arg){
 	struct ProcessBlock *pBlock = (struct ProcessBlock*)arg;
@@ -687,8 +458,8 @@ void *process_request(void *arg){
 		printf("URL: %s %s\n",http_request.method,http_request.url);
 		HttpResponse *http_response =  dispatch_request(http_request,urls,urls_count);
 	
-		middleware_add_encoding(http_response,&http_request);
-		middleware_add_content_length(http_response,NULL);
+		// middleware_add_encoding(http_response,&http_request);
+		// middleware_add_content_length(http_response,NULL);
 		middleware_add_connection_status(http_response,&http_request);
 		
 		char *response_header = make_header_response(http_response->status,
@@ -703,12 +474,14 @@ void *process_request(void *arg){
 
 		for(int i=0;i<http_response->headers;i++){
 			if(
-				strcmp(http_response->headers[i].key,"Connection") != 0 ||
-				strcmp(http_response->headers[i].value,"close") != 0 
-			 ){continue;}
-			close(client);
-			printf("Connection Closed %d\n",client);
-			return NULL;
+				strcmp(http_response->headers[i].key,"Connection") == 0 &&
+				strcmp(http_response->headers[i].value,"close") == 0 
+			 ){
+				close(client);
+				printf("Connection Closed %d\n",client);
+				return NULL;
+			 }
+
 
 		};
 
@@ -716,7 +489,6 @@ void *process_request(void *arg){
 
 	return NULL;
 }
-
 
 
 int main() {
