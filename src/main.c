@@ -239,8 +239,8 @@ void *process_request(void *arg){
 		printf("URL: %s %s\n",http_request.method,http_request.url);
 		HttpResponse *http_response =  dispatch_request(http_request,urls,urls_count);
 	
-		// middleware_add_encoding(http_response,&http_request);
-		// middleware_add_content_length(http_response,NULL);
+		middleware_add_encoding(http_response,&http_request);
+		middleware_add_content_length(http_response,NULL);
 		middleware_add_connection_status(http_response,&http_request);
 		
 		char *response_header = make_header_response(http_response->status,
@@ -253,7 +253,7 @@ void *process_request(void *arg){
 		send(client,http_response->body,http_response->body_length,0);
 		free(response_header);
 
-		for(int i=0;i<http_response->headers;i++){
+		for(int i=0;i<http_response->headers_count;i++){
 			if(
 				strcmp(http_response->headers[i].key,"Connection") == 0 &&
 				strcmp(http_response->headers[i].value,"close") == 0 

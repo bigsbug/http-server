@@ -90,8 +90,10 @@ char **tokenizeString(char *string,char *delimiter, int *counts){
 
 
 
-// Function to compress a string using gzip
+
 int compress_string(const char *input, char **output, int *output_len) {
+    // Function to compress a string using gzip
+
     z_stream stream = {0};
     int ret;
 
